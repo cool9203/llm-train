@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 
 import torch
-from datasets import Dataset, load_dataset
+from datasets import Dataset, DatasetDict, load_dataset
 from PIL import Image
 from transformers import (
     AutoModelForVision2Seq,
@@ -124,7 +124,7 @@ if __name__ == "__main__":
                 images = list()
                 messages = list()
                 for image_path in payload["images"]:
-                    image = Image.open(Path(script_args.dataset_name, payload["image"]))
+                    image = Image.open(image_path)
                     img_byte_arr = io.BytesIO()
                     image.save(img_byte_arr, format=image.format)
                     image = Image.open(
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
                 for message in payload["messages"]:
                     if isinstance(message["content"], str):
-                        results = list(re.finditer(r"<image> ?", payload["content"]))
+                        results = list(re.finditer(r"<image> ?", message["content"]))
                         contents = list()
                         if results:
                             for result in results:
@@ -146,9 +146,9 @@ if __name__ == "__main__":
                                     )
                         else:
                             contents.append(
-                                {"text": payload["messages"], "type": "text"}
+                                {"text": message["content"], "type": "text"}
                             )
-                        messages.append({"role": payload["role"], "content": contents})
+                        messages.append({"role": message["role"], "content": contents})
                     elif isinstance(message["content"], list):
                         messages.append(message)
                     else:
@@ -159,10 +159,11 @@ if __name__ == "__main__":
                 data.append(
                     {
                         "messages": messages,
-                        "images": [images],
+                        "images": images,
                     }
                 )
         dataset = Dataset.from_list(data)
+        dataset = DatasetDict({"train": dataset})
     else:
         dataset = load_dataset(
             script_args.dataset_name, name=script_args.dataset_config
