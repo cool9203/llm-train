@@ -32,6 +32,7 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset, DatasetDict, load_dataset
+from peft import get_peft_model
 from PIL import Image
 from transformers import (
     AutoModelForVision2Seq,
@@ -81,6 +82,10 @@ if __name__ == "__main__":
         trust_remote_code=model_args.trust_remote_code,
         **model_kwargs,
     )
+
+    peft_config = get_peft_config(model_args)
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
 
     ################
     # Create a data collator to encode text and image pairs
@@ -183,7 +188,6 @@ if __name__ == "__main__":
             else None
         ),
         processing_class=processor.tokenizer,
-        peft_config=get_peft_config(model_args),
     )
 
     trainer.train()
