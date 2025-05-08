@@ -27,8 +27,11 @@ For meta-llama/Llama-3.2-11B-Vision-Instruct, use: (requires transformers>=4.45.
 
 import io
 import json
+import math
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import torch
 from datasets import Dataset, DatasetDict, load_dataset
@@ -50,9 +53,51 @@ from trl import (
     get_quantization_config,
 )
 
+
+@dataclass
+class ExtendArguments:
+    image_max_pixels: Optional[int] = field(
+        default=None,
+        metadata={"help": "Image max pixels"},
+    )
+    image_min_pixels: Optional[int] = field(
+        default=None,
+        metadata={"help": "Image min pixels"},
+    )
+
+
+def _preprocess_image(
+    image: Image.Image,
+    image_max_pixels: int,
+    image_min_pixels: int,
+    **kwds,
+) -> Image.Image:
+    r"""Pre-process a single image."""
+    if (image.width * image.height) > image_max_pixels:
+        resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
+        image = image.resize((width, height))
+
+    if (image.width * image.height) < image_min_pixels:
+        resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
+        image = image.resize((width, height))
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    return image
+
+
 if __name__ == "__main__":
-    parser = TrlParser((ScriptArguments, SFTConfig, ModelConfig))
-    script_args, training_args, model_args = parser.parse_args_and_config()
+    parser = TrlParser((ScriptArguments, SFTConfig, ModelConfig, ExtendArguments))
+    script_args, training_args, model_args, extend_args = parser.parse_args_and_config()
     training_args.gradient_checkpointing_kwargs = dict(use_reentrant=False)
     training_args.remove_unused_columns = False
     training_args.dataset_kwargs = {"skip_prepare_dataset": True}
@@ -130,6 +175,10 @@ if __name__ == "__main__":
                 messages = list()
                 for image_path in payload["images"]:
                     image = Image.open(image_path)
+                    image = _preprocess_image(
+                        image=image,
+                        **extend_args,
+                    )
                     img_byte_arr = io.BytesIO()
                     image.save(img_byte_arr, format=image.format)
                     image = Image.open(
