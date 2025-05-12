@@ -1,0 +1,22 @@
+accelerate launch scripts/train_vlm.py \
+	--dataset_name data/tmpco-table-reasoning-code_block-row_comment-20250502-html.json \
+	--model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
+	--per_device_train_batch_size 1 \
+	--gradient_accumulation_steps 4 \
+	--image_max_pixels 1631220 \
+	--output_dir saves/qwen2.5_vl-3b/tmpco/table/html/lora/sft/20250512 \
+	--logging_steps 10 \
+	--save_strategy epoch \
+	--bf16 \
+	--torch_dtype bfloat16 \
+	--attn_implementation flash_attention_2 \
+	--gradient_checkpointing \
+	--use_peft \
+	--lora_dropout 0.0 \
+	--lora_target_modules ".*proj" \
+	--max_length 2048 \
+	--learning_rate 1.0e-4 \
+	--num_train_epochs 10.0 \
+	--lr_scheduler_type cosine \
+	--warmup_ratio 0.1 \
+    --ddp_timeout 180000000
