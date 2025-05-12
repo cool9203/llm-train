@@ -3,6 +3,8 @@
 import argparse
 import base64
 import io
+import math
+import os
 import time
 import traceback
 from pathlib import Path
@@ -13,10 +15,10 @@ import httpx
 import pypandoc
 import torch
 from fastapi import FastAPI, File, Form, UploadFile
-from peft import PeftConfig, PeftModel
+from peft import PeftConfig
 from PIL import Image
 from pydantic import BaseModel, ConfigDict
-import math
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from transformers import (
     AutoModelForVision2Seq,
     AutoProcessor,
@@ -28,9 +30,10 @@ from transformers import (
 
 from llm_train import utils
 
-
 _default_prompt = "latex table ocr"
-_default_system_prompt = "You should follow the instructions carefully and explain your answers in detail."
+_default_system_prompt = (
+    "You should follow the instructions carefully and explain your answers in detail."
+)
 
 __model: dict[str, PreTrainedModel | ProcessorMixin | PreTrainedTokenizer | str] = {
     "model": None,
@@ -52,18 +55,35 @@ def arg_parser() -> argparse.Namespace:
         argparse.Namespace: 使用args.name取得傳遞的參數
     """
 
-    parser = argparse.ArgumentParser(description="Run test website to test unsloth training with llm or vlm")
-    parser.add_argument("-m", "--model_name", type=str, default=None, help="Run model name or path")
+    parser = argparse.ArgumentParser(
+        description="Run test website to test unsloth training with llm or vlm"
+    )
+    parser.add_argument(
+        "-m", "--model_name", type=str, default=None, help="Run model name or path"
+    )
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Web server host")
     parser.add_argument("--port", type=int, default=7860, help="Web server port")
-    parser.add_argument("--max_tokens", type=int, default=4096, help="Run model generate max new tokens")
-    parser.add_argument("--device_map", type=str, default="cuda:0", help="Run model device map")
-    parser.add_argument("--load_in_4bit", action="store_true", help="Load model in 4bit")
-    parser.add_argument("--default_prompt", type=str, default=_default_prompt, help="Default prompt")
     parser.add_argument(
-        "--default_system_prompt", type=str, default=_default_system_prompt, help="Default system prompt"
+        "--max_tokens", type=int, default=4096, help="Run model generate max new tokens"
     )
-    parser.add_argument("--example_folder", type=str, default="example", help="Example folder")
+    parser.add_argument(
+        "--device_map", type=str, default="cuda:0", help="Run model device map"
+    )
+    parser.add_argument(
+        "--load_in_4bit", action="store_true", help="Load model in 4bit"
+    )
+    parser.add_argument(
+        "--default_prompt", type=str, default=_default_prompt, help="Default prompt"
+    )
+    parser.add_argument(
+        "--default_system_prompt",
+        type=str,
+        default=_default_system_prompt,
+        help="Default system prompt",
+    )
+    parser.add_argument(
+        "--example_folder", type=str, default="example", help="Example folder"
+    )
     parser.add_argument("--dev", dest="dev_mode", action="store_true", help="Dev mode")
 
     args = parser.parse_args()
@@ -88,17 +108,28 @@ class InferenceTableResponse(BaseModel):
 
 
 def _preprocess_image(
-    image: "ImageObject", image_max_pixels: int, image_min_pixels: int, **kwargs
-) -> "ImageObject":
-    r"""Pre-process a single image."""
+    image: Image.Image,
+    image_max_pixels: int,
+    image_min_pixels: int,
+    **kwds,
+) -> Image.Image:
+    r"""Pre-process a single image.
+    Copy from https://github.com/hiyouga/LLaMA-Factory/blob/845af89ea4a8ee4003d72de1cbddbe85910c37df/src/llamafactory/data/mm_plugin.py#L210-L227
+    """
     if image_max_pixels and (image.width * image.height) > image_max_pixels:
         resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
-        width, height = int(image.width * resize_factor), int(image.height * resize_factor)
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
         image = image.resize((width, height))
 
     if image_min_pixels and (image.width * image.height) < image_min_pixels:
         resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
-        width, height = int(image.width * resize_factor), int(image.height * resize_factor)
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
         image = image.resize((width, height))
 
     if image.mode != "RGB":
@@ -111,43 +142,27 @@ def load_model(
     model_name: str,
     load_in_4bit: bool = False,
     device_map: str = "cuda:0",
-    revision: str = None,
-    trust_remote_code: bool = False,
 ) -> tuple[PreTrainedModel, ProcessorMixin | PreTrainedTokenizer]:
     try:
-        model = AutoModelForVision2Seq.from_pretrained(
-            pretrained_model_name_or_path=model_name,
-            device_map=device_map,
-            quantization_config=BitsAndBytesConfig(
-                load_in_4bit=load_in_4bit,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-            ),
-            attn_implementation="flash_attention_2",
-        )
-        print("Use flash attention")
-    except (ValueError, ImportError):
-        model = AutoModelForVision2Seq.from_pretrained(
-            pretrained_model_name_or_path=model_name,
-            device_map=device_map,
-            quantization_config=BitsAndBytesConfig(
-                load_in_4bit=load_in_4bit,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-            ),
-        )
+        peft_config = PeftConfig.from_pretrained(model_name)
+    except ValueError:
+        peft_config = None
+
+    model = AutoModelForVision2Seq.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+        device_map=device_map,
+        torch_dtype=torch.bfloat16,
+        quantization_config=BitsAndBytesConfig(
+            load_in_4bit=load_in_4bit,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        ),
+    )
     tokenizer = AutoProcessor.from_pretrained(
-        "Qwen/Qwen2.5-VL-7B-Instruct",
+        pretrained_model_name_or_path=peft_config.base_model_name_or_path
+        if peft_config
+        else model_name,
         device_map=device_map,
     )
-
-
-    # For inference mode
-    model.gradient_checkpointing = False
-    model.training = False
-    for name, module in model.named_modules():
-        if hasattr(module, "gradient_checkpointing"):
-            module.gradient_checkpointing = False
-        if hasattr(module, "training"):
-            module.training = False
 
     return (model, tokenizer)
 
@@ -180,8 +195,14 @@ def generate(
             ],
         }
     )
-    image = _preprocess_image(image, image_max_pixels=1631220, image_min_pixels=None)
-    input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    image = _preprocess_image(
+        image,
+        image_max_pixels=int(os.getenv("IMAGE_MAX_PIXELS", 1631220)),
+        image_min_pixels=int(os.getenv("IMAGE_MIN_PIXELS", 0)),
+    )
+    input_text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
     inputs = tokenizer(
         text=[input_text],
         images=[image],
@@ -189,19 +210,29 @@ def generate(
         padding=True,
     ).to(model.device)
 
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=max_new_tokens,
-        **kwds,
-    )
+    with sdpa_kernel(
+        backends=[
+            SDPBackend.FLASH_ATTENTION,
+            SDPBackend.EFFICIENT_ATTENTION,
+            SDPBackend.MATH,
+        ]
+    ):
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            **kwds,
+        )
 
     # Reference: https://github.com/huggingface/transformers/issues/17117#issuecomment-1124497554
     return {
-        "content": tokenizer.batch_decode(outputs[:, inputs["input_ids"].shape[1] :], skip_special_tokens=True)[0],
+        "content": tokenizer.batch_decode(
+            outputs[:, inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        )[0],
         "tokens": {
             "prompt_tokens": inputs["input_ids"].shape[1],
             "completion_tokens": len(outputs[:, inputs["input_ids"].shape[1] :][0]),
-            "total_tokens": inputs["input_ids"].shape[1] + len(outputs[:, inputs["input_ids"].shape[1] :][0]),
+            "total_tokens": inputs["input_ids"].shape[1]
+            + len(outputs[:, inputs["input_ids"].shape[1] :][0]),
         },
     }
 
@@ -234,7 +265,9 @@ def inference_table_api(
     )
 
     for i in range(len(output.images)):
-        with io.BytesIO(base64.b64decode(output.images[i].encode("utf-8"))) as origin_img_io:
+        with io.BytesIO(
+            base64.b64decode(output.images[i].encode("utf-8"))
+        ) as origin_img_io:
             img: Image.Image = Image.open(origin_img_io)
             with io.BytesIO() as img_io:
                 img.save(img_io, format=img_type)
@@ -273,8 +306,13 @@ def inference_table(
     return (
         output.origin_content,
         output.html_content,
-        [Image.open(io.BytesIO(base64.b64decode(image.encode("utf-8")))) for image in output.images],
-        output.tokens.completion_tokens / output.used_time if output.used_time > 0 else 0,
+        [
+            Image.open(io.BytesIO(base64.b64decode(image.encode("utf-8"))))
+            for image in output.images
+        ],
+        output.tokens.completion_tokens / output.used_time
+        if output.used_time > 0
+        else 0,
         output.tokens.completion_tokens,
         output.used_time,
     )
@@ -369,11 +407,17 @@ def _inference_table(
 
         table_str = "".join(origin_responses)
         if utils.is_latex_table(table_str):
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="latex")
+            html_response = pypandoc.convert_text(
+                source=table_str, to="html", format="latex"
+            )
         elif utils.is_html_table(table_str):
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="html")
+            html_response = pypandoc.convert_text(
+                source=table_str, to="html", format="html"
+            )
         else:
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="markdown")
+            html_response = pypandoc.convert_text(
+                source=table_str, to="html", format="markdown"
+            )
 
     except Exception as e:
         html_response = "推論輸出無法解析"
@@ -382,7 +426,9 @@ def _inference_table(
     return InferenceTableResponse(
         origin_content="\n\n".join(origin_responses),
         html_content=html_response,
-        images=[base64.b64encode(crop_image).decode("utf-8") for crop_image in crop_images],
+        images=[
+            base64.b64encode(crop_image).decode("utf-8") for crop_image in crop_images
+        ],
         tokens=UsageToken(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -436,18 +482,40 @@ def test_website(
 
             with gr.Column():
                 _model_name = gr.Textbox(
-                    label="模型名稱或路徑", value=__model.get("name", None), visible=not model_name
+                    label="模型名稱或路徑",
+                    value=__model.get("name", None),
+                    visible=not model_name,
                 )
-                system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=default_system_prompt)
-                prompt_input = gr.Textbox(label="輸入文字提示", lines=2, value=default_prompt)
-                _max_tokens = gr.Slider(label="Max tokens", value=max_tokens, minimum=1, maximum=8192, step=1)
+                system_prompt_input = gr.Textbox(
+                    label="輸入系統文字提示", lines=2, value=default_system_prompt
+                )
+                prompt_input = gr.Textbox(
+                    label="輸入文字提示", lines=2, value=default_prompt
+                )
+                _max_tokens = gr.Slider(
+                    label="Max tokens",
+                    value=max_tokens,
+                    minimum=1,
+                    maximum=8192,
+                    step=1,
+                )
                 detect_table = gr.Checkbox(label="是否自動偵測表格", value=True)
                 crop_table_padding = gr.Slider(
-                    label="偵測表格裁切框 padding", value=-60, minimum=-300, maximum=300, step=1
+                    label="偵測表格裁切框 padding",
+                    value=-60,
+                    minimum=-300,
+                    maximum=300,
+                    step=1,
                 )
-                repair_latex = gr.Checkbox(label="修復 latex", value=True, visible=dev_mode)
-                full_border = gr.Checkbox(label="修復 latex 表格全框線", visible=dev_mode)
-                unsqueeze = gr.Checkbox(label="修復 latex 並解開多行/列合併", visible=dev_mode)
+                repair_latex = gr.Checkbox(
+                    label="修復 latex", value=True, visible=dev_mode
+                )
+                full_border = gr.Checkbox(
+                    label="修復 latex 表格全框線", visible=dev_mode
+                )
+                unsqueeze = gr.Checkbox(
+                    label="修復 latex 並解開多行/列合併", visible=dev_mode
+                )
                 average_token = gr.Textbox(label="每秒幾個 token")
                 all_complate_token = gr.Textbox(label="生成多少 token")
                 usage_time = gr.Textbox(label="總花費時間")
