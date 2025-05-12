@@ -73,7 +73,7 @@ def _preprocess_image(
     **kwds,
 ) -> Image.Image:
     r"""Pre-process a single image."""
-    if (image.width * image.height) > image_max_pixels:
+    if image_max_pixels and (image.width * image.height) > image_max_pixels:
         resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
         width, height = (
             int(image.width * resize_factor),
@@ -81,7 +81,7 @@ def _preprocess_image(
         )
         image = image.resize((width, height))
 
-    if (image.width * image.height) < image_min_pixels:
+    if image_min_pixels and (image.width * image.height) < image_min_pixels:
         resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
         width, height = (
             int(image.width * resize_factor),
@@ -177,7 +177,7 @@ if __name__ == "__main__":
                     image = Image.open(image_path)
                     image = _preprocess_image(
                         image=image,
-                        **extend_args,
+                        **vars(extend_args),
                     )
                     img_byte_arr = io.BytesIO()
                     image.save(img_byte_arr, format=image.format)
