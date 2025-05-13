@@ -175,12 +175,12 @@ if __name__ == "__main__":
                 messages = list()
                 for image_path in payload["images"]:
                     image = Image.open(image_path)
-                    image = _preprocess_image(
+                    precessed_image = _preprocess_image(
                         image=image,
                         **vars(extend_args),
                     )
                     img_byte_arr = io.BytesIO()
-                    image.save(img_byte_arr, format=image.format)
+                    precessed_image.save(img_byte_arr, format=image.format)
                     image = Image.open(
                         img_byte_arr
                     )  # this is very important it forces parquet to save bytes instead of the path
