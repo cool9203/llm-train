@@ -5,6 +5,7 @@ import logging
 import os
 import platform
 import pprint
+import re
 from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -448,6 +449,9 @@ def table_correct_rate(
             result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(
                 gold_df_non_ignore_header
             )
+            # Filter df rows
+            for value in ["合計", "總計"]:
+                gold_df = gold_df[~gold_df.isin([value]).any(axis=1)]
 
         if predict_df is not None and gold_df is not None:
             # Detect header from rows
@@ -492,6 +496,12 @@ def table_correct_rate(
                     .replace("\n", "")
                     .replace(":", "")
                 )
+
+                # Post fix multi header error
+                if re.match(r"\(.*\)", predict_text):
+                    _result = re.findall(r"""'([^'"]+)'""", predict_text)
+                    predict_text = _result[0] if _result else predict_text
+
                 if gold_text == predict_text:
                     result.cell_correct_count += 1
                 else:
