@@ -188,20 +188,15 @@ if __name__ == "__main__":
 
                 for message in payload["messages"]:
                     if isinstance(message["content"], str):
-                        results = list(re.finditer(r"<image> ?", message["content"]))
                         contents = list()
-                        if results:
-                            for result in results:
-                                if re.match(r"<image> ?", result.group()):
-                                    contents.append({"text": None, "type": "image"})
-                                else:
-                                    contents.append(
-                                        {"text": result.group(), "type": "text"}
-                                    )
-                        else:
-                            contents.append(
-                                {"text": message["content"], "type": "text"}
-                            )
+                        for i, text in enumerate(
+                            re.split(r"<image>", message["content"])
+                        ):
+                            if i > 0:
+                                contents.append({"text": None, "type": "image"})
+                            if text:
+                                contents.append({"text": text, "type": "text"})
+
                         messages.append({"role": message["role"], "content": contents})
                     elif isinstance(message["content"], list):
                         messages.append(message)
