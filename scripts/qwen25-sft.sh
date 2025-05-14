@@ -1,4 +1,4 @@
-accelerate launch scripts/train_vlm.py \
+accelerate launch src/llm_train/train_vlm.py \
 	--dataset_name data/tmpco-table-reasoning-code_block-row_comment-20250502-html.json \
 	--model_name_or_path Qwen/Qwen2.5-VL-3B-Instruct \
 	--per_device_train_batch_size 1 \

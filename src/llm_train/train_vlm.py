@@ -105,11 +105,7 @@ if __name__ == "__main__":
     ################
     # Model, Tokenizer & Processor
     ################
-    torch_dtype = (
-        model_args.torch_dtype
-        if model_args.torch_dtype in ["auto", None]
-        else getattr(torch, model_args.torch_dtype)
-    )
+    torch_dtype = model_args.torch_dtype if model_args.torch_dtype in ["auto", None] else getattr(torch, model_args.torch_dtype)
     quantization_config = get_quantization_config(model_args)
     model_kwargs = dict(
         revision=model_args.model_revision,
@@ -118,9 +114,7 @@ if __name__ == "__main__":
         device_map=get_kbit_device_map() if quantization_config is not None else None,
         quantization_config=quantization_config,
     )
-    processor = AutoProcessor.from_pretrained(
-        model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code
-    )
+    processor = AutoProcessor.from_pretrained(model_args.model_name_or_path, trust_remote_code=model_args.trust_remote_code)
 
     model = AutoModelForVision2Seq.from_pretrained(
         model_args.model_name_or_path,
@@ -137,10 +131,7 @@ if __name__ == "__main__":
     ################
     def collate_fn(examples):
         # Get the texts and images, and apply the chat template
-        texts = [
-            processor.apply_chat_template(example["messages"], tokenize=False)
-            for example in examples
-        ]
+        texts = [processor.apply_chat_template(example["messages"], tokenize=False) for example in examples]
         images = [example["images"] for example in examples]
         if isinstance(model, LlavaForConditionalGeneration):
             # LLava1.5 does not support multiple images
@@ -153,9 +144,7 @@ if __name__ == "__main__":
         labels = batch["input_ids"].clone()
         labels[labels == processor.tokenizer.pad_token_id] = -100  #
         # Ignore the image token index in the loss computation (model specific)
-        image_token_id = processor.tokenizer.convert_tokens_to_ids(
-            processor.image_token
-        )
+        image_token_id = processor.tokenizer.convert_tokens_to_ids(processor.image_token)
         labels[labels == image_token_id] = -100
         batch["labels"] = labels
 
@@ -164,10 +153,7 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    if (
-        Path(script_args.dataset_name).is_file()
-        and Path(script_args.dataset_name).suffix == ".json"
-    ):
+    if Path(script_args.dataset_name).is_file() and Path(script_args.dataset_name).suffix == ".json":
         data = list()
         with Path(script_args.dataset_name).open(mode="r", encoding="utf-8") as f:
             for payload in json.load(fp=f):
@@ -181,17 +167,13 @@ if __name__ == "__main__":
                     )
                     img_byte_arr = io.BytesIO()
                     precessed_image.save(img_byte_arr, format=image.format)
-                    image = Image.open(
-                        img_byte_arr
-                    )  # this is very important it forces parquet to save bytes instead of the path
+                    image = Image.open(img_byte_arr)  # this is very important it forces parquet to save bytes instead of the path
                     images.append(image)
 
                 for message in payload["messages"]:
                     if isinstance(message["content"], str):
                         contents = list()
-                        for i, text in enumerate(
-                            re.split(r"<image>", message["content"])
-                        ):
+                        for i, text in enumerate(re.split(r"<image>", message["content"])):
                             if i > 0:
                                 contents.append({"text": None, "type": "image"})
                             if text:
@@ -214,9 +196,7 @@ if __name__ == "__main__":
         dataset = Dataset.from_list(data)
         dataset = DatasetDict({"train": dataset})
     else:
-        dataset = load_dataset(
-            script_args.dataset_name, name=script_args.dataset_config
-        )
+        dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
 
     ################
     # Training
@@ -226,11 +206,7 @@ if __name__ == "__main__":
         args=training_args,
         data_collator=collate_fn,
         train_dataset=dataset[script_args.dataset_train_split],
-        eval_dataset=(
-            dataset[script_args.dataset_test_split]
-            if training_args.eval_strategy != "no"
-            else None
-        ),
+        eval_dataset=(dataset[script_args.dataset_test_split] if training_args.eval_strategy != "no" else None),
         processing_class=processor.tokenizer,
     )
 
