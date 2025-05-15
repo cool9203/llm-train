@@ -14,7 +14,6 @@ import gradio as gr
 import pypandoc
 import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from peft.tuners.lora.model import LoraModel
 from PIL import Image
 from pydantic import BaseModel, ConfigDict
 from torch.nn.attention import SDPBackend, sdpa_kernel
@@ -32,7 +31,7 @@ from llm_train import utils
 _default_prompt = os.getenv("DEFAULT_PROMPT", "請使用html解析圖片裡的表格")
 _default_system_prompt = os.getenv("DEFAULT_SYSTEM_PROMPT", "")
 
-__model: dict[str, PreTrainedModel | LoraModel | ProcessorMixin | PreTrainedTokenizer | str] = {
+__model: dict[str, PreTrainedModel | ProcessorMixin | PreTrainedTokenizer | str] = {
     "model": None,
     "tokenizer": None,
     "name": None,
@@ -273,10 +272,11 @@ def inference_table(
         image = image.encode("utf-8")
 
     if model_name and model_name in __model.get("adapters", []):
+        __model["model"].enable_adapters()
         __model["model"].set_adapter(model_name)
     elif model_name in ["__base__", __model["name"]]:
         model_name = __model["name"]
-        __model["model"].unload()
+        __model["model"].disable_adapters()
     else:
         ValueError(f"Not support this model: '{model_name}")
 
