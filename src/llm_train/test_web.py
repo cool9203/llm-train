@@ -395,8 +395,9 @@ def test_website(
 
             with gr.Column():
                 _model_name = gr.Dropdown(
+                    choices=model_names,
                     label="模型名稱",
-                    value=model_names,
+                    value=model_names[1] if len(model_names) > 1 else model_names[0],
                 )
                 system_prompt_input = gr.Textbox(label="輸入系統文字提示", lines=2, value=default_system_prompt)
                 prompt_input = gr.Textbox(label="輸入文字提示", lines=2, value=default_prompt)
