@@ -16,6 +16,11 @@ import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel, ConfigDict
+from transformers import (
+    AutoProcessor,
+    PreTrainedTokenizer,
+    ProcessorMixin,
+)
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 
@@ -24,8 +29,9 @@ from llm_train import utils
 _default_prompt = os.getenv("DEFAULT_PROMPT", "請使用html解析圖片裡的表格")
 _default_system_prompt = os.getenv("DEFAULT_SYSTEM_PROMPT", "")
 
-__model: dict[str, LLM | str | list[str]] = {
+__model: dict[str, LLM | ProcessorMixin | PreTrainedTokenizer | str | list[str]] = {
     "model": None,
+    "tokenizer": None,
     "name": None,
     "adapters": [],
 }
@@ -86,7 +92,7 @@ class InferenceTableResponse(BaseModel):
 def load_model(
     model_name: str,
     load_in_4bit: bool = False,
-) -> LLM:
+) -> tuple[LLM, ProcessorMixin | PreTrainedTokenizer]:
     model: LLM = LLM(
         model=model_name,
         dtype=torch.bfloat16,
@@ -94,10 +100,13 @@ def load_model(
         enable_lora=True,
     )
 
-    return model
+    tokenizer = AutoProcessor.from_pretrained(
+        pretrained_model_name_or_path=model_name,
+    )
+
+    return (model, tokenizer)
 
 
-@torch.inference_mode()
 def generate(
     model_name: str,
     image,
@@ -119,7 +128,9 @@ def generate(
         lora_request = None
     else:
         ValueError(f"Not support this model: '{model_name}")
+
     model = __model.get("model")
+    tokenizer = __model.get("tokenizer")
     messages = list()
 
     if system_prompt:
@@ -143,9 +154,13 @@ def generate(
         image_max_pixels=int(os.getenv("IMAGE_MAX_PIXELS", 1631220)),
         image_min_pixels=int(os.getenv("IMAGE_MIN_PIXELS", 0)),
     )
+    input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     outputs = model.generate(
-        messages,
+        {
+            "prompt": input_text,
+            "multi_modal_data": {"image": image},
+        },
         SamplingParams(
             max_tokens=max_new_tokens,
             **kwds,
@@ -334,8 +349,8 @@ def test_website(
             )
     model_names += [lora_module["name"] for lora_module in formatted_lora_modules]
 
-    # Load base model and adapter
-    __model["model"] = load_model(
+    # Load base model
+    (__model["model"], __model["tokenizer"]) = load_model(
         model_name=model_name,
         load_in_4bit=kwds.get("load_in_4bit", False),
     )
