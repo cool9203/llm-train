@@ -1,12 +1,13 @@
 # coding: utf-8
 
+import math
 import re
 from inspect import signature
 from io import StringIO
 from typing import Any, Callable, Dict, Sequence, Tuple, Union
 
 import pandas as pd
-
+from PIL import Image
 
 _latex_table_begin_pattern = r"\\begin{tabular}{[lrc|]*}"
 _latex_table_end_pattern = r"\\end{tabular}"
@@ -145,9 +146,7 @@ def convert_latex_table_to_pandas(
 
     # Split latex table to list table
     cleaned_data = list()
-    table_data = [
-        row.replace(r"\\", "").replace(r"\hline", "").replace(r"\cline", "").strip().split("&") for row in rows
-    ]
+    table_data = [row.replace(r"\\", "").replace(r"\hline", "").replace(r"\cline", "").strip().split("&") for row in rows]
     for row in table_data:
         _row_data = list()
         for cell_text in row:
@@ -233,9 +232,7 @@ def convert_pandas_to_latex(
                 skip_count -= 1
             else:
                 multicolumn_result = re.findall(_latex_multicolumn_pattern, str(df.iloc[i, column_index]))
-                skip_count = (
-                    int(multicolumn_result[0][0]) - 1 if multicolumn_result and skip_count == 0 else skip_count
-                )
+                skip_count = int(multicolumn_result[0][0]) - 1 if multicolumn_result and skip_count == 0 else skip_count
                 row.append(str(df.iloc[i, column_index]))
         latex_table_str += _row_before_text + f"{'&'.join(row)}\\\\\n"
 
@@ -299,3 +296,34 @@ def convert_table_to_pandas(
         )
     else:
         raise FormatError("Not Support convert the format table")
+
+
+def preprocess_image(
+    image: Image.Image,
+    image_max_pixels: int,
+    image_min_pixels: int,
+    **kwds,
+) -> Image.Image:
+    r"""Pre-process a single image.
+    Copy from https://github.com/hiyouga/LLaMA-Factory/blob/845af89ea4a8ee4003d72de1cbddbe85910c37df/src/llamafactory/data/mm_plugin.py#L210-L227
+    """
+    if image_max_pixels and (image.width * image.height) > image_max_pixels:
+        resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
+        image = image.resize((width, height))
+
+    if image_min_pixels and (image.width * image.height) < image_min_pixels:
+        resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
+        width, height = (
+            int(image.width * resize_factor),
+            int(image.height * resize_factor),
+        )
+        image = image.resize((width, height))
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    return image

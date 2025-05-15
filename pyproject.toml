@@ -1,10 +1,19 @@
 [project]
-name            = "llm-train"
-version         = "0.0.1"
-description     = "Add your description here"
-readme          = "README.md"
+name = "llm-train"
+version = "0.0.1"
+description = "Use trl to train llm"
+readme = "README.md"
 requires-python = ">=3.10"
-dependencies    = ["peft>=0.15.2", "pillow>=11.2.1", "trl>=0.17.0"]
+dependencies = [
+    "fastapi>=0.115.12",
+    "gradio>=5.29.0",
+    "lxml>=5.4.0",
+    "peft>=0.15.2",
+    "pillow>=11.2.1",
+    "pypandoc>=1.15",
+    "trl>=0.17.0",
+    "vllm>=0.8.5.post1",
+]
 
 [tool.ruff]
 line-length = 130
