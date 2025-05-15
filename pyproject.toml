@@ -12,7 +12,6 @@ dependencies = [
     "pillow>=11.2.1",
     "pypandoc>=1.15",
     "trl>=0.17.0",
-    "vllm>=0.8.5.post1",
 ]
 
 [tool.ruff]
