@@ -122,9 +122,9 @@ def run_vlm_result(
     logger.debug(f"data: {data}")
 
     # Eval
-    for image_filepath, inference_filepath in TQDM.tqdm(data, desc="Eval") if tqdm else data:
+    for image_filepath, inference_filepath in TQDM.tqdm(data, desc="Eval", smoothing=0) if tqdm else data:
         if not Path(str(inference_filepath) + ".txt").exists() or not Path(str(inference_filepath) + ".html").exists():
-            logger.info(f"Call api date: {dt.datetime.now()!s}")
+            logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
             try:
                 predict_latex_table_content, html_render_latex_table_content = _vlm_inference(
