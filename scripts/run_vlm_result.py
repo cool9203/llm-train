@@ -13,7 +13,6 @@ from pathlib import Path
 import httpx
 import tqdm as TQDM
 
-
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -32,6 +31,7 @@ def arg_parser() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run VLM result script")
     parser.add_argument("--datasets", type=str, nargs="+", required=True, default=[], help="Run dataset path")
     parser.add_argument("--api_url", type=str, default=None, help="Model gradio api url")
+    parser.add_argument("--model_name", type=str, required=True, help="Model name")
     parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
     parser.add_argument(
         "--prompt",
@@ -57,8 +57,6 @@ def _vlm_inference(
     prompt: str,
     image_path: str,
     model_name: str,
-    detect_table: bool,
-    crop_table_padding: int,
     system_prompt: str,
     max_tokens: int,
     retry: int,
@@ -69,13 +67,8 @@ def _vlm_inference(
     _request_data = dict()
     _request_data.update(prompt=prompt) if prompt is not None else None
     _request_data.update(model_name=model_name) if model_name is not None else None
-    _request_data.update(detect_table=detect_table) if detect_table is not None else _request_data.update(
-        detect_table=False
-    )
-    _request_data.update(crop_table_padding=crop_table_padding) if crop_table_padding is not None else None
     _request_data.update(system_prompt=system_prompt) if system_prompt is not None else None
     _request_data.update(max_tokens=max_tokens) if max_tokens is not None else None
-    _request_data.update(repair_latex=False)
 
     for _ in range(retry):
         try:
@@ -90,7 +83,7 @@ def _vlm_inference(
         except Exception as e:
             print(e)
             _error = e
-            time.sleep(10)
+            time.sleep(1)
     raise _error
 
 
@@ -100,11 +93,8 @@ def run_vlm_result(
     inference_result_folder: str = None,
     prompt: str = None,
     model_name: str = None,
-    detect_table: bool = False,
-    crop_table_padding: int = -60,
     system_prompt: str = None,
     max_tokens: int = 4096,
-    repair_latex: bool = False,
     retry: int = 5,
     timeout: float = 900,
     tqdm: bool = True,
@@ -142,11 +132,8 @@ def run_vlm_result(
                     prompt=prompt,
                     image_path=image_filepath,
                     model_name=model_name,
-                    detect_table=detect_table,
-                    crop_table_padding=crop_table_padding,
                     system_prompt=system_prompt,
                     max_tokens=max_tokens,
-                    repair_latex=repair_latex,
                     retry=retry,
                     timeout=timeout,
                 )
