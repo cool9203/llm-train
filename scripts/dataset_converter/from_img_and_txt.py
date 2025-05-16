@@ -152,9 +152,9 @@ def from_img_and_txt(
                     )
 
                     reasoning_contents.append(
-                        f"表格{df_index + 1}結構:\n"
-                        + f"    - 共有{len(df.columns)}欄與{len(df) + 1 if output_format == 'latex' else len(df)}列\n"
-                        + f"    - 欄位名稱分別為{replaced_columns}"
+                        f"確認表格{df_index + 1}結構，"
+                        + f"看起來有{len(df.columns)}欄與{len(df) + 1 if output_format == 'latex' else len(df)}列。"
+                        + f"其中欄位名稱分別為{replaced_columns}。"
                     )
 
                     if output_format == "latex":
@@ -253,12 +253,9 @@ def from_img_and_txt(
                     texts.append(text)
                 reasoning_content = (
                     "<think>\n"
-                    + "首先要仔細檢查圖片裡的表格結構，如表格數量、欄數、列數，好準確判斷各個表格內容。\n"
-                    + f"接著根據圖片中的表格內容，使用 {output_format.lower()} 程式碼解析表格:\n\n"
-                    + "圖片內容表格解析:\n\n"
-                    + "表格數量:\n"
-                    + f"    該圖片總共包含{len(dfs)}個表格\n\n"
-                    + "\n\n".join(reasoning_contents)
+                    + f"首先仔細檢查圖片裡的表格數量，看起來總共有{len(dfs)}個表格。\n"
+                    + "\n".join(reasoning_contents)
+                    + f"\n根據user的要求，需要使用{output_format.lower()}語法解析表格。"
                     + "\n</think>"
                 )
                 if reasoning:
