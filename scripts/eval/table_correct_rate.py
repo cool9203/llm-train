@@ -89,9 +89,7 @@ def arg_parser() -> argparse.Namespace:
         default=[],
         help="Ignore table header names",
     )
-    parser.add_argument(
-        "--output", type=str, default="eval_result", help="Eval detail output path"
-    )
+    parser.add_argument("--output", type=str, default="eval_result", help="Eval detail output path")
     parser.add_argument(
         "--skip_space_row",
         dest="remove_all_space_row",
@@ -139,20 +137,14 @@ def calc_correct_rate(
     table_correct = sum(
         [
             1
-            if not result.predict_latex_error
-            and not result.gold_latex_error
-            and result.cell_correct_count == result.cell_count
+            if not result.predict_latex_error and not result.gold_latex_error and result.cell_correct_count == result.cell_count
             else 0
             for result in results
         ]
     )
     cell_correct = sum([result.cell_correct_count for result in results])
-    format_incorrect = sum(
-        [1 if result.predict_latex_error else 0 for result in results]
-    )
-    label_format_incorrect = sum(
-        [1 if result.gold_latex_error else 0 for result in results]
-    )
+    format_incorrect = sum([1 if result.predict_latex_error else 0 for result in results])
+    label_format_incorrect = sum([1 if result.gold_latex_error else 0 for result in results])
     return (
         [
             table_correct,
@@ -188,10 +180,7 @@ def convert_filepath(
         _filepath = str(filepath)
     if path_type[0] in ["windows"] and path_type[1] in ["linux", "wsl"]:
         _filepath = PureWindowsPath(
-            _filepath.replace("C:", "/c")
-            .replace("D:", "/d")
-            .replace("c:", "/c")
-            .replace("d:", "/d")
+            _filepath.replace("C:", "/c").replace("D:", "/d").replace("c:", "/c").replace("d:", "/d")
         ).as_posix()
     elif path_type[0] in ["linux", "wsl"] and path_type[1] in ["windows"]:
         if _filepath.startswith("/c"):
@@ -231,9 +220,7 @@ def save_result(
     output_path.mkdir(parents=True, exist_ok=True)
 
     if style:
-        style: tuple[str, str] = (
-            style if isinstance(style, tuple) else tuple(style.split(":"))
-        )
+        style: tuple[str, str] = style if isinstance(style, tuple) else tuple(style.split(":"))
 
     correct_rate = calc_correct_rate(results=results)
 
@@ -241,9 +228,7 @@ def save_result(
         f.write(
             ("-" * 25 + "\n").join(
                 [
-                    pprint.pformat(result)
-                    .replace("gold_df=  ", "gold_df=\n")
-                    .replace("predict_df=  ", "predict_df=\n")
+                    pprint.pformat(result).replace("gold_df=  ", "gold_df=\n").replace("predict_df=  ", "predict_df=\n")
                     for result in results
                 ]
             )
@@ -264,35 +249,30 @@ def save_result(
         if not Path(output_path, Path(result.dataset_path).name).exists():
             Path(output_path, Path(result.dataset_path).name).mkdir()
 
-        with Path(
-            output_path,
-            Path(result.dataset_path).name,
-            f"{Path(result.txt_filepath).stem}.html",
-        ).open("w", encoding="utf-8") as f:
-            image_filepath = convert_filepath(
-                filepath=result.image_filepath, path_type=path_type
-            )
+        if result.cell_correct_count != result.cell_count:
+            with Path(
+                output_path,
+                Path(result.dataset_path).name,
+                f"{Path(result.txt_filepath).stem}.html",
+            ).open("w", encoding="utf-8") as f:
+                image_filepath = convert_filepath(filepath=result.image_filepath, path_type=path_type)
 
-            error_indexes_styling = [
-                (index[0], index[1] + 1 if index[1] is not None else 0)
-                for index in result.error_indexes
-            ]
-            if result.predict_df is not None:
-                df = pd.DataFrame(
-                    [list(result.predict_df.columns)]
-                    + result.predict_df.values.tolist()
-                )
-                if style:
-                    styling_df = df.style.apply(
-                        highlight_multiple,
-                        axis=None,
-                        targets=error_indexes_styling,
-                        style=style,
-                    )
-                else:
-                    styling_df = df
-                styling_df_html = styling_df.to_html(header=False, index=False)
-                f.write(f"""{_css}
+                error_indexes_styling = [
+                    (index[0], index[1] + 1 if index[1] is not None else 0) for index in result.error_indexes
+                ]
+                if result.predict_df is not None:
+                    df = pd.DataFrame([list(result.predict_df.columns)] + result.predict_df.values.tolist())
+                    if style:
+                        styling_df = df.style.apply(
+                            highlight_multiple,
+                            axis=None,
+                            targets=error_indexes_styling,
+                            style=style,
+                        )
+                    else:
+                        styling_df = df
+                    styling_df_html = styling_df.to_html(header=False, index=False)
+                    f.write(f"""{_css}
 Cell count: {result.cell_count}
 <br>
 Cell correct count: {result.cell_correct_count}
@@ -346,9 +326,7 @@ def table_correct_rate(
     for txt_filepath in iter_data:
         _data = None
         for image_extension in [".jpg", ".png"]:
-            if Path(
-                txt_filepath.parent, f"{txt_filepath.stem}{image_extension.lower()}"
-            ).exists():
+            if Path(txt_filepath.parent, f"{txt_filepath.stem}{image_extension.lower()}").exists():
                 _data = [
                     txt_filepath,
                     Path(
@@ -356,9 +334,7 @@ def table_correct_rate(
                         f"{txt_filepath.stem}{image_extension.lower()}",
                     ),
                 ]
-            elif Path(
-                txt_filepath.parent, f"{txt_filepath.stem}{image_extension.upper()}"
-            ).exists():
+            elif Path(txt_filepath.parent, f"{txt_filepath.stem}{image_extension.upper()}").exists():
                 _data = [
                     txt_filepath,
                     Path(
@@ -380,6 +356,7 @@ def table_correct_rate(
                         inference_result_folder,
                         f"{txt_filepath.stem}{extension}",
                     )
+                    break
             if inference_data_path:
                 _data.append(inference_data_path)
                 data.append(tuple(_data))
@@ -392,9 +369,7 @@ def table_correct_rate(
     logger.debug(f"data: {data}")
 
     # Eval
-    for txt_filepath, image_filepath, inference_filepath in (
-        TQDM.tqdm(data, desc="Eval") if tqdm else data
-    ):
+    for txt_filepath, image_filepath, inference_filepath in TQDM.tqdm(data, desc="Eval") if tqdm else data:
         with Path(inference_filepath).open("r", encoding="utf-8") as f:
             predict_latex_table_text = f.read()
 
@@ -405,14 +380,10 @@ def table_correct_rate(
         try:
             # Pre-process replace vocab
             for find_word, replace_word in _replace_vocab.items():
-                gold_latex_table_text = gold_latex_table_text.replace(
-                    find_word, replace_word
-                )
+                gold_latex_table_text = gold_latex_table_text.replace(find_word, replace_word)
 
             for find_word, replace_word in _replace_vocab.items():
-                predict_latex_table_text = predict_latex_table_text.replace(
-                    find_word, replace_word
-                )
+                predict_latex_table_text = predict_latex_table_text.replace(find_word, replace_word)
 
             # Convert to pandas
             gold_df = utils.convert_table_to_pandas(
@@ -446,9 +417,7 @@ def table_correct_rate(
 
         if gold_df is not None:
             gold_df_non_ignore_header = ~gold_df.columns.isin(ignore_headers)
-            result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(
-                gold_df_non_ignore_header
-            )
+            result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(gold_df_non_ignore_header)
             # Filter df rows
             for value in ["合計", "總計"]:
                 gold_df = gold_df[~gold_df.isin([value]).any(axis=1)]
@@ -456,18 +425,12 @@ def table_correct_rate(
         if predict_df is not None and gold_df is not None:
             # Detect header from rows
             if detect_headers:
-                gold_df = detect_pandas_header(
-                    df=gold_df, detect_headers=detect_headers
-                )
-                predict_df = detect_pandas_header(
-                    df=predict_df, detect_headers=detect_headers
-                )
+                gold_df = detect_pandas_header(df=gold_df, detect_headers=detect_headers)
+                predict_df = detect_pandas_header(df=predict_df, detect_headers=detect_headers)
                 result.gold_df = gold_df
                 result.predict_df = predict_df
                 gold_df_non_ignore_header = ~gold_df.columns.isin(ignore_headers)
-                result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(
-                    gold_df_non_ignore_header
-                )
+                result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(gold_df_non_ignore_header)
 
         if predict_df is None:
             result.predict_latex_error = True
@@ -475,27 +438,12 @@ def table_correct_rate(
             result.gold_latex_error = True
         else:
             # Compare header(column)
-            for column_index in range(
-                min(len(gold_df.columns), len(predict_df.columns))
-            ):
-                if (
-                    gold_df.columns[column_index] in ignore_headers
-                    or predict_df.columns[column_index] in ignore_headers
-                ):
+            for column_index in range(min(len(gold_df.columns), len(predict_df.columns))):
+                if gold_df.columns[column_index] in ignore_headers or predict_df.columns[column_index] in ignore_headers:
                     continue
 
-                gold_text = (
-                    str(gold_df.columns[column_index])
-                    .replace(" ", "")
-                    .replace("\n", "")
-                    .replace(":", "")
-                )
-                predict_text = (
-                    str(predict_df.columns[column_index])
-                    .replace(" ", "")
-                    .replace("\n", "")
-                    .replace(":", "")
-                )
+                gold_text = str(gold_df.columns[column_index]).replace(" ", "").replace("\n", "").replace(":", "")
+                predict_text = str(predict_df.columns[column_index]).replace(" ", "").replace("\n", "").replace(":", "")
 
                 # Post fix multi header error
                 if re.match(r"\(.*\)", predict_text):
@@ -508,34 +456,18 @@ def table_correct_rate(
                     result.error_indexes.append((column_index, None))
 
             # Compare row
-            for column_index in range(
-                min(len(gold_df.columns), len(predict_df.columns))
-            ):
-                if (
-                    gold_df.columns[column_index] in ignore_headers
-                    or predict_df.columns[column_index] in ignore_headers
-                ):
+            for column_index in range(min(len(gold_df.columns), len(predict_df.columns))):
+                if gold_df.columns[column_index] in ignore_headers or predict_df.columns[column_index] in ignore_headers:
                     continue
 
                 for row_index in range(min(len(gold_df), len(predict_df))):
-                    gold_text = (
-                        gold_df.iloc[row_index, column_index]
-                        .strip()
-                        .replace("\n", "")
-                        .replace(":", "")
-                    )
-                    predict_text = (
-                        predict_df.iloc[row_index, column_index]
-                        .strip()
-                        .replace("\n", "")
-                        .replace(":", "")
-                    )
+                    gold_text = gold_df.iloc[row_index, column_index].strip().replace("\n", "").replace(":", "")
+                    predict_text = predict_df.iloc[row_index, column_index].strip().replace("\n", "").replace(":", "")
                     gold_text_split = gold_text.split(" ")
                     predict_text_split = predict_text.split(" ")
-                    if (
-                        len(gold_text_split) == len(predict_text_split)
-                        and set(gold_text_split) == set(predict_text_split)
-                    ) or (gold_text.replace(" ", "") == predict_text.replace(" ", "")):
+                    if (len(gold_text_split) == len(predict_text_split) and set(gold_text_split) == set(predict_text_split)) or (
+                        gold_text.replace(" ", "") == predict_text.replace(" ", "")
+                    ):
                         result.cell_correct_count += 1
                     else:
                         result.error_indexes.append((column_index, row_index))
@@ -566,34 +498,18 @@ if __name__ == "__main__":
             **parameters,
         )
         correct_rate = calc_correct_rate(results=dataset_result)
-        logger.info(
-            f"Table correct rate: {correct_rate[0][0]} / {correct_rate[0][1]} = {correct_rate[0][2]}"
-        )
-        logger.info(
-            f"Cell correct rate: {correct_rate[1][0]} / {correct_rate[1][1]} = {correct_rate[1][2]}"
-        )
-        logger.info(
-            f"Format incorrect rate: {correct_rate[2][0]} / {correct_rate[2][1]} = {correct_rate[2][2]}"
-        )
-        logger.info(
-            f"Label format incorrect rate: {correct_rate[3][0]} / {correct_rate[3][1]} = {correct_rate[3][2]}"
-        )
+        logger.info(f"Table correct rate: {correct_rate[0][0]} / {correct_rate[0][1]} = {correct_rate[0][2]}")
+        logger.info(f"Cell correct rate: {correct_rate[1][0]} / {correct_rate[1][1]} = {correct_rate[1][2]}")
+        logger.info(f"Format incorrect rate: {correct_rate[2][0]} / {correct_rate[2][1]} = {correct_rate[2][2]}")
+        logger.info(f"Label format incorrect rate: {correct_rate[3][0]} / {correct_rate[3][1]} = {correct_rate[3][2]}")
         logger.info("-" * 25)
         results += dataset_result
 
     correct_rate = calc_correct_rate(results=results)
-    logger.info(
-        f"Table correct rate: {correct_rate[0][0]} / {correct_rate[0][1]} = {correct_rate[0][2]}"
-    )
-    logger.info(
-        f"Cell correct rate: {correct_rate[1][0]} / {correct_rate[1][1]} = {correct_rate[1][2]}"
-    )
-    logger.info(
-        f"Format incorrect rate: {correct_rate[2][0]} / {correct_rate[2][1]} = {correct_rate[2][2]}"
-    )
-    logger.info(
-        f"Label format incorrect rate: {correct_rate[3][0]} / {correct_rate[3][1]} = {correct_rate[3][2]}"
-    )
+    logger.info(f"Table correct rate: {correct_rate[0][0]} / {correct_rate[0][1]} = {correct_rate[0][2]}")
+    logger.info(f"Cell correct rate: {correct_rate[1][0]} / {correct_rate[1][1]} = {correct_rate[1][2]}")
+    logger.info(f"Format incorrect rate: {correct_rate[2][0]} / {correct_rate[2][1]} = {correct_rate[2][2]}")
+    logger.info(f"Label format incorrect rate: {correct_rate[3][0]} / {correct_rate[3][1]} = {correct_rate[3][2]}")
     logger.info("-" * 25)
 
     source_platform = platform.platform().lower()
