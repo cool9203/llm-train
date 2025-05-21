@@ -153,48 +153,50 @@ if __name__ == "__main__":
     ################
     # Dataset
     ################
-    if Path(script_args.dataset_name).is_file() and Path(script_args.dataset_name).suffix == ".json":
-        data = list()
-        with Path(script_args.dataset_name).open(mode="r", encoding="utf-8") as f:
-            for payload in json.load(fp=f):
-                images = list()
-                messages = list()
-                for image_path in payload["images"]:
-                    image = Image.open(image_path)
-                    precessed_image = _preprocess_image(
-                        image=image,
-                        **vars(extend_args),
-                    )
-                    img_byte_arr = io.BytesIO()
-                    precessed_image.save(img_byte_arr, format=image.format)
-                    image = Image.open(img_byte_arr)  # this is very important it forces parquet to save bytes instead of the path
-                    images.append(image)
-
-                for message in payload["messages"]:
-                    if isinstance(message["content"], str):
-                        contents = list()
-                        for i, text in enumerate(re.split(r"<image>", message["content"])):
-                            if i > 0:
-                                contents.append({"text": None, "type": "image"})
-                            if text:
-                                contents.append({"text": text, "type": "text"})
-
-                        messages.append({"role": message["role"], "content": contents})
-                    elif isinstance(message["content"], list):
-                        messages.append(message)
-                    else:
-                        raise TypeError(
-                            f"{script_args.dataset_name} messages.content not support type: {type(message['content'])}"
+    dataset_names = str(script_args.dataset_name).split(",")
+    data = list()
+    for dataset_name in dataset_names:
+        if Path(dataset_name).is_file() and Path(dataset_name).suffix == ".json":
+            with Path(dataset_name).open(mode="r", encoding="utf-8") as f:
+                for payload in json.load(fp=f):
+                    images = list()
+                    messages = list()
+                    for image_path in payload["images"]:
+                        image = Image.open(image_path)
+                        precessed_image = _preprocess_image(
+                            image=image,
+                            **vars(extend_args),
                         )
+                        img_byte_arr = io.BytesIO()
+                        precessed_image.save(img_byte_arr, format=image.format)
+                        image = Image.open(
+                            img_byte_arr
+                        )  # this is very important it forces parquet to save bytes instead of the path
+                        images.append(image)
 
-                data.append(
-                    {
-                        "messages": messages,
-                        "images": images,
-                    }
-                )
-        dataset = Dataset.from_list(data)
-        dataset = DatasetDict({"train": dataset})
+                    for message in payload["messages"]:
+                        if isinstance(message["content"], str):
+                            contents = list()
+                            for i, text in enumerate(re.split(r"<image>", message["content"])):
+                                if i > 0:
+                                    contents.append({"text": None, "type": "image"})
+                                if text:
+                                    contents.append({"text": text, "type": "text"})
+
+                            messages.append({"role": message["role"], "content": contents})
+                        elif isinstance(message["content"], list):
+                            messages.append(message)
+                        else:
+                            raise TypeError(f"{dataset_name} messages.content not support type: {type(message['content'])}")
+
+                    data.append(
+                        {
+                            "messages": messages,
+                            "images": images,
+                        }
+                    )
+    if len(dataset_names) > 1:
+        dataset = DatasetDict({"train": Dataset.from_list(data)})
     else:
         dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
 
