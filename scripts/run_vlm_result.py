@@ -146,7 +146,7 @@ def run_vlm_result(
             except Exception:
                 pass
 
-            time.sleep(10)
+            time.sleep(1)
 
 
 if __name__ == "__main__":
