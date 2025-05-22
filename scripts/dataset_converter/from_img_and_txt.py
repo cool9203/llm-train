@@ -154,7 +154,11 @@ def from_img_and_txt(
                     reasoning_contents.append(
                         f"確認表格{df_index + 1}結構，"
                         + f"看起來有{len(df.columns)}欄與{len(df) + 1 if output_format == 'latex' else len(df)}列。"
-                        + f"其中欄位名稱分別為{replaced_columns}。"
+                        + (
+                            f"其中欄位名稱分別為{replaced_columns}。"
+                            if not df.columns.str.fullmatch(r"\d+").all()
+                            else "看起來沒有欄位名稱"
+                        )
                     )
 
                     if output_format == "latex":
@@ -206,7 +210,12 @@ def from_img_and_txt(
                         text = re.sub(
                             r"<tr.*>",
                             "<tr>",
-                            df.to_html(index=False).replace(' border="1"', "").replace(' class="dataframe"', ""),
+                            df.to_html(
+                                index=False,
+                                header=not df.columns.str.fullmatch(r"\d+").all(),  # Ignore number's herder, if all is number
+                            )
+                            .replace(' border="1"', "")
+                            .replace(' class="dataframe"', ""),
                         )
                         text = text_replace(
                             text=text,
