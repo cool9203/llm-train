@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import torch
 from datasets import Dataset, DatasetDict, load_dataset
 from peft import get_peft_model
@@ -155,8 +156,13 @@ if __name__ == "__main__":
     ################
     dataset_names = str(script_args.dataset_name).split(",")
     data = list()
-    for dataset_name in dataset_names:
-        if Path(dataset_name).is_file() and Path(dataset_name).suffix == ".json":
+    if np.array(
+        [
+            True if Path(dataset_name).is_file() and Path(dataset_name).suffix == ".json" else False
+            for dataset_name in dataset_names
+        ]
+    ).all():
+        for dataset_name in dataset_names:
             with Path(dataset_name).open(mode="r", encoding="utf-8") as f:
                 for payload in json.load(fp=f):
                     images = list()
@@ -195,7 +201,6 @@ if __name__ == "__main__":
                             "images": images,
                         }
                     )
-    if len(dataset_names) > 1:
         dataset = DatasetDict({"train": Dataset.from_list(data)})
     else:
         dataset = load_dataset(script_args.dataset_name, name=script_args.dataset_config)
