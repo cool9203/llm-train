@@ -80,3 +80,18 @@ python scripts/eval/table_correct_rate.py \
     --detect_headers <DETECT_HEADER_1> <DETECT_HEADER_2> \
     --datasets <EVAL_DATASET_PATH_1> <EVAL_DATASET_PATH_2>
 ```
+
+## Run test web
+
+```bash
+DEFAULT_PROMPT=<DEFAULT_PROMPT> \
+DEFAULT_SYSTEM_PROMPT=<DEFAULT_SYSTEM_PROMPT> \
+python src/llm_train/test_web.py \
+    --model_name <BASE_MODEL_NAME> \
+    --lora-modules <ADAPTER_NAME_1>=<ADAPTER_MODEL_PATH_1> <ADAPTER_NAME_2>=<ADAPTER_MODEL_PATH_2> \
+    --max_tokens <MAX_TOKENS> \
+    --host <HOST> \
+    --port <PORT> \
+    --device_map <DEVICE_MAP> \
+    --dev
+```
