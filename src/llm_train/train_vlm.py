@@ -27,7 +27,6 @@ For meta-llama/Llama-3.2-11B-Vision-Instruct, use: (requires transformers>=4.45.
 
 import io
 import json
-import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,6 +53,8 @@ from trl import (
     get_quantization_config,
 )
 
+from llm_train import utils
+
 
 @dataclass
 class ExtendArguments:
@@ -65,35 +66,6 @@ class ExtendArguments:
         default=None,
         metadata={"help": "Image min pixels"},
     )
-
-
-def _preprocess_image(
-    image: Image.Image,
-    image_max_pixels: int,
-    image_min_pixels: int,
-    **kwds,
-) -> Image.Image:
-    r"""Pre-process a single image."""
-    if image_max_pixels and (image.width * image.height) > image_max_pixels:
-        resize_factor = math.sqrt(image_max_pixels / (image.width * image.height))
-        width, height = (
-            int(image.width * resize_factor),
-            int(image.height * resize_factor),
-        )
-        image = image.resize((width, height))
-
-    if image_min_pixels and (image.width * image.height) < image_min_pixels:
-        resize_factor = math.sqrt(image_min_pixels / (image.width * image.height))
-        width, height = (
-            int(image.width * resize_factor),
-            int(image.height * resize_factor),
-        )
-        image = image.resize((width, height))
-
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-
-    return image
 
 
 if __name__ == "__main__":
@@ -169,7 +141,7 @@ if __name__ == "__main__":
                     messages = list()
                     for image_path in payload["images"]:
                         image = Image.open(image_path)
-                        precessed_image = _preprocess_image(
+                        precessed_image = utils.preprocess_image(
                             image=image,
                             **vars(extend_args),
                         )
