@@ -490,6 +490,21 @@ def table_correct_rate(
                     predict_text = predict_df.iloc[row_index, column_index].strip().replace("\n", "").replace(":", "")
                     gold_text_split = gold_text.split(" ")
                     predict_text_split = predict_text.split(" ")
+
+                    # Convert number to float type, if is
+                    gold_text_split = set(
+                        [
+                            float(text.replace(",", "")) if re.fullmatch(r"[\d,]+\.\d+|[\d,]+", text) else text
+                            for text in gold_text_split
+                        ]
+                    )
+                    predict_text_split = set(
+                        [
+                            float(text.replace(",", "")) if re.fullmatch(r"[\d,]+\.\d+|[\d,]+", text) else text
+                            for text in predict_text_split
+                        ]
+                    )
+
                     if (len(gold_text_split) == len(predict_text_split) and set(gold_text_split) == set(predict_text_split)) or (
                         gold_text.replace(" ", "") == predict_text.replace(" ", "")
                     ):
