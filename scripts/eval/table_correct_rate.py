@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+import numpy as np
 import pandas as pd
 import tqdm as TQDM
 
@@ -24,6 +25,7 @@ _replace_vocab = {
     "□": " ",
     "（": "(",
     "）": ")",
+    "撑": "撐",
 }
 _css = r"""<style>
     details {
@@ -87,7 +89,14 @@ def arg_parser() -> argparse.Namespace:
         type=str,
         nargs="+",
         default=[],
-        help="Ignore table header names",
+        help="Ignore table header names, support regex",
+    )
+    parser.add_argument(
+        "--ignore_values",
+        type=str,
+        nargs="+",
+        default=[],
+        help="Ignore table row contain values, support regex",
     )
     parser.add_argument("--output", type=str, default="eval_result", help="Eval detail output path")
     parser.add_argument(
@@ -306,12 +315,23 @@ def detect_pandas_header(
     return detected_df if detected_df is not None else df
 
 
+def get_pandas_ignore_header(
+    df: pd.DataFrame,
+    ignore_headers: list[str],
+) -> np.ndarray:
+    mask = np.array([False for _ in range(len(df.columns))], dtype=bool)
+    for ignore_header in ignore_headers:
+        mask = mask | df.columns.str.match(ignore_header)
+    return mask
+
+
 def table_correct_rate(
     dataset_path: PathLike,
     inference_result_folder: str,
     remove_all_space_row: bool = True,
     detect_headers: list[str] = [],
     ignore_headers: list[str] = [],
+    ignore_values: list[str] = [],
     tqdm: bool = True,
 ) -> list[EvalResult]:
     data: list[tuple[PathLike, PathLike]] = list()
@@ -416,11 +436,16 @@ def table_correct_rate(
         )
 
         if gold_df is not None:
-            gold_df_non_ignore_header = ~gold_df.columns.isin(ignore_headers)
-            result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(gold_df_non_ignore_header)
-            # Filter df rows
-            for value in ["合計", "總計"]:
-                gold_df = gold_df[~gold_df.isin([value]).any(axis=1)]
+            gold_df_non_ignore_header_count = sum(~get_pandas_ignore_header(df=gold_df, ignore_headers=ignore_headers))
+            result.cell_count = gold_df_non_ignore_header_count * len(gold_df) + gold_df_non_ignore_header_count
+            for ignore_value in ignore_values:
+                gold_df = gold_df[~gold_df.apply(lambda row: row.astype(str).str.contains(ignore_value, regex=True)).any(axis=1)]
+
+        if predict_df is not None:
+            for ignore_value in ignore_values:
+                predict_df = predict_df[
+                    ~predict_df.apply(lambda row: row.astype(str).str.contains(ignore_value, regex=True)).any(axis=1)
+                ]
 
         if predict_df is not None and gold_df is not None:
             # Detect header from rows
@@ -429,8 +454,8 @@ def table_correct_rate(
                 predict_df = detect_pandas_header(df=predict_df, detect_headers=detect_headers)
                 result.gold_df = gold_df
                 result.predict_df = predict_df
-                gold_df_non_ignore_header = ~gold_df.columns.isin(ignore_headers)
-                result.cell_count = sum(gold_df_non_ignore_header) * len(gold_df) + sum(gold_df_non_ignore_header)
+                gold_df_non_ignore_header_count = sum(~get_pandas_ignore_header(df=gold_df, ignore_headers=ignore_headers))
+                result.cell_count = gold_df_non_ignore_header_count * len(gold_df) + gold_df_non_ignore_header_count
 
         if predict_df is None:
             result.predict_latex_error = True
