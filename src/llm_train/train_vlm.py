@@ -34,6 +34,7 @@ from typing import Optional
 
 import numpy as np
 import torch
+import tqdm
 from datasets import Dataset, DatasetDict, load_dataset
 from peft import get_peft_model
 from PIL import Image
@@ -128,6 +129,7 @@ if __name__ == "__main__":
     ################
     dataset_names = str(script_args.dataset_name).split(",")
     data = list()
+    show_messages_count = 3
     if np.array(
         [
             True if Path(dataset_name).is_file() and Path(dataset_name).suffix == ".json" else False
@@ -136,7 +138,7 @@ if __name__ == "__main__":
     ).all():
         for dataset_name in dataset_names:
             with Path(dataset_name).open(mode="r", encoding="utf-8") as f:
-                for payload in json.load(fp=f):
+                for payload in tqdm.tqdm(list(json.load(fp=f))):
                     images = list()
                     messages = list()
                     for image_path in payload["images"]:
@@ -166,6 +168,10 @@ if __name__ == "__main__":
                             messages.append(message)
                         else:
                             raise TypeError(f"{dataset_name} messages.content not support type: {type(message['content'])}")
+
+                    if show_messages_count:
+                        print(messages)
+                        show_messages_count -= 1
 
                     data.append(
                         {
