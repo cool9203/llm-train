@@ -195,7 +195,11 @@ if __name__ == "__main__":
         processing_class=processor.tokenizer,
     )
 
-    trainer.train()
+    trainer.train(
+        resume_from_checkpoint=True
+        if str(training_args.resume_from_checkpoint).lower == "true"
+        else training_args.resume_from_checkpoint,
+    )
 
     # Save and push to hub
     trainer.save_model(training_args.output_dir)
