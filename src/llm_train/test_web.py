@@ -362,7 +362,7 @@ def inference_table(
     return [
         InferenceTableResponse(
             origin_content="\n\n".join(generate_responses[i]["content"]),
-            html_content=generate_responses.get("html_content", "推論輸出無法解析"),
+            html_content=generate_responses[i].get("html_content", "推論輸出無法解析"),
             images=[base64.b64encode(images[i]).decode("utf-8")],
             model_name=model_name,
             tokens=UsageToken(
