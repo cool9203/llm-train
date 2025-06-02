@@ -218,7 +218,7 @@ def batch_inference_table_api(
     model_name: Annotated[str, Form()] = None,
     system_prompt: Annotated[str, Form()] = _default_system_prompt,
     img_type: Annotated[str, Form()] = "png",
-) -> InferenceTableResponse:
+) -> list[InferenceTableResponse]:
     try:
         _images = [image.file.read() for image in images]
         outputs = inference_table(
@@ -254,7 +254,7 @@ def inference_table_api(
 ) -> InferenceTableResponse:
     try:
         output = inference_table(
-            image=image.file.read(),
+            images=[image.file.read()],
             prompt=prompt,
             max_tokens=max_tokens,
             model_name=model_name,
@@ -307,7 +307,7 @@ def inference_table(
     **kwds,
 ) -> list[InferenceTableResponse]:
     for i in range(len(images)):
-        if isinstance(images, Image.Image):
+        if isinstance(images[i], Image.Image):
             with io.BytesIO() as img_io:
                 images[i].save(img_io, format="png")
                 images[i] = img_io.getvalue()
