@@ -36,11 +36,15 @@ def merge_lora(
     merged_model = PeftModel.from_pretrained(base_model, lora_model)
     tokenizer = AutoProcessor.from_pretrained(pretrained_model_name_or_path=model_name)
 
-    merged_model.merge_and_unload()
+    print("Start merge model")
+    model = merged_model.merge_and_unload()
 
+    print("Save model")
     Path(output_path).mkdir(parents=True, exist_ok=True)
-    merged_model.save_pretrained(output_path)
+    model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
+
+    print("Success merge lora model and saved")
 
 
 if __name__ == "__main__":
