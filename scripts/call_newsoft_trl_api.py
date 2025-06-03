@@ -23,10 +23,20 @@ def arg_parser() -> argparse.Namespace:
         help="Api parameter: prompt",
     )
     parser.add_argument("--max_token", type=int, default=512, help="Api parameter: max token")
+    parser.add_argument("--batch_size", type=int, default=5, help="Run batch inference size")
 
     args = parser.parse_args()
 
     return args
+
+
+def batch_generator(
+    data: list,
+    batch_size: int,
+):
+    """將 list 拆分為 batch 的 generator"""
+    for i in range(0, len(data), batch_size):
+        yield data[i : i + batch_size]
 
 
 def call_newsoft_trl_api(
@@ -35,6 +45,7 @@ def call_newsoft_trl_api(
     output_path: os.PathLike,
     prompt: str,
     max_tokens: int = 512,
+    batch_size: int = 5,
 ):
     # 處理圖片前, 先取得過往已處理的資料
     existing_results = list()
@@ -58,9 +69,10 @@ def call_newsoft_trl_api(
 
     # Run
     unprocessed_images = [img for img in image_files if os.path.basename(img) not in processed_files]
-    for image_path in tqdm(unprocessed_images, desc="處理圖片中"):
-        with open(image_path, "rb") as image_file:
-            files = {"image": image_file}
+    with tqdm(total=len(unprocessed_images), desc="處理圖片中") as progress_bar:
+        for image_paths in batch_generator(unprocessed_images, batch_size=batch_size):
+            images = [open(image_path, "rb") for image_path in image_paths]
+            files = {"image": images}
             data = {
                 "model_name": "lora",
                 "img_type": "png",
@@ -68,24 +80,27 @@ def call_newsoft_trl_api(
                 "max_tokens": max_tokens,
                 "prompt": prompt,
             }
-            response = requests.post(api_url, files=files, data=data)
-            response = response.json()
-            if "images" in response:
-                del response["images"]
-            print(response)
-            origin_content = str(response["origin_content"]).lower()
-            origin_content = re.sub(r'"品項"\s*:\s*\[.*?\],?', "", origin_content, flags=re.DOTALL)
-            try:
-                origin_content = ast.literal_eval(origin_content)
-            except Exception as e:
-                print(e)
+            responses = requests.post(api_url, files=files, data=data)
+            responses = responses.json()
+            for i in range(responses):
+                if "images" in responses[i]:
+                    del responses[i]["images"]
+                origin_content = str(responses[i]["origin_content"]).lower()
+                origin_content = re.sub(r'"品項"\s*:\s*\[.*?\],?', "", origin_content, flags=re.DOTALL)
+                try:
+                    origin_content = ast.literal_eval(origin_content)
+                except Exception as e:
+                    print(e)
 
-            all_result.append(
-                {
-                    "filename": os.path.basename(image_path),
-                    "api_result": origin_content,
-                    "used_time": response["used_time"],
-                }
-            )
+                all_result.append(
+                    {
+                        "filename": Path(image_paths[i]).stem,
+                        "api_result": origin_content,
+                        "used_time": responses[i]["used_time"],
+                    }
+                )
+                images[i].close()
+
+            progress_bar.update(len(image_paths))
             with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
                 json.dump(all_result, json_file, ensure_ascii=False, indent=4)
