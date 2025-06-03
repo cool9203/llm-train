@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import argparse
+from pathlib import Path
 
 from peft import PeftModel
 from transformers import (
@@ -37,6 +38,7 @@ def merge_lora(
 
     merged_model.merge_and_unload()
 
+    Path(output_path).mkdir(parents=True, exist_ok=True)
     merged_model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
 
