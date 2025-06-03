@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +14,16 @@ try:
     support_cn2an = True
 except ImportError:
     support_cn2an = False
+
+_cn2an_replace_vocab = {
+    # Fix word error
+    "參": "叁",
+    r"弍|兩": "貳",
+    r"o|×": "零",
+    "元": "",
+    # Fix cn2an error
+    r"零$|零[拾佰仟萬]": "",
+}
 
 
 def arg_parser() -> argparse.Namespace:
@@ -88,11 +99,16 @@ def v4_compare_with_ans(
                             continue
                     if match_row_key == "TotalAmountCH".lower() and support_cn2an:
                         try:
-                            if cn2an.cn2an(
-                                str(item_ocr_result[match_row_key]).replace("參", "叁").replace("兩", "二").replace("元", "")
-                            ) == cn2an.cn2an(
-                                str(matched_row[match_row_key].iloc[0]).replace("參", "叁").replace("兩", "二").replace("元", "")
-                            ):
+                            gold_text = str(item_ocr_result[match_row_key])
+                            predict_text = str(matched_row[match_row_key].iloc[0])
+
+                            for find_pattern, target_pattern in _cn2an_replace_vocab.items():
+                                gold_text = re.sub(find_pattern, target_pattern, gold_text)
+
+                            for find_pattern, target_pattern in _cn2an_replace_vocab.items():
+                                predict_text = re.sub(find_pattern, target_pattern, predict_text)
+
+                            if cn2an.cn2an(gold_text, "smart") == cn2an.cn2an(predict_text, "smart"):
                                 correct_counter[match_row_key]["count"] += 1
                                 single_dict[f"{match_row_key}_result"] = 1
                             continue
