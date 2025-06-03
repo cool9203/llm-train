@@ -82,7 +82,7 @@ def call_newsoft_trl_api(
             }
             responses = requests.post(api_url, files=files, data=data)
             responses = responses.json()
-            for i in range(responses):
+            for i in range(len(responses)):
                 if "images" in responses[i]:
                     del responses[i]["images"]
                 origin_content = str(responses[i]["origin_content"]).lower()
