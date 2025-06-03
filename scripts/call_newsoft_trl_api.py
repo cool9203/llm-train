@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import argparse
+import ast
 import json
 import os
 import re
@@ -86,6 +87,10 @@ def call_newsoft_trl_api(
                     del responses[i]["images"]
                 origin_content = str(responses[i]["origin_content"]).lower()
                 origin_content = re.sub(r'"品項"\s*:\s*\[.*?\],?', "", origin_content, flags=re.DOTALL)
+                try:
+                    origin_content = ast.literal_eval(origin_content.replace("\n", ""))
+                except Exception as e:
+                    print(e)
 
                 all_result.append(
                     {
