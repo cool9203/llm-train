@@ -3,11 +3,13 @@
 import argparse
 from pathlib import Path
 
+import torch
 from peft import LoraModel, PeftModel
 from transformers import (
     AutoModelForVision2Seq,
     AutoProcessor,
     PreTrainedModel,
+    ProcessorMixin,
 )
 
 
@@ -32,12 +34,13 @@ def merge_lora(
     base_model: PreTrainedModel = AutoModelForVision2Seq.from_pretrained(
         pretrained_model_name_or_path=model_name,
         device_map=device_map,
+        torch_dtype=torch.bfloat16,
     )
     merged_model: LoraModel = PeftModel.from_pretrained(base_model, lora_model)
-    tokenizer = AutoProcessor.from_pretrained(pretrained_model_name_or_path=model_name)
+    tokenizer: ProcessorMixin = AutoProcessor.from_pretrained(pretrained_model_name_or_path=model_name)
 
     print("Start merge model")
-    model = merged_model.merge_and_unload(progressbar=True)
+    model: PreTrainedModel = merged_model.merge_and_unload(progressbar=True)
 
     print("Save model")
     Path(output_path).mkdir(parents=True, exist_ok=True)
