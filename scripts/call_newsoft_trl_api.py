@@ -14,7 +14,7 @@ from tqdm import tqdm
 def arg_parser() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run NewSoft invoice result")
     parser.add_argument("-i", "--input_path", type=str, required=True, help="Input data path")
-    parser.add_argument("-o", "--output", type=str, required=True, help="Output result filename")
+    parser.add_argument("-o", "--output_path", type=str, required=True, help="Output result filename")
     parser.add_argument("--api_url", type=str, required=True, help="Api url")
     parser.add_argument(
         "--prompt",
@@ -22,7 +22,7 @@ def arg_parser() -> argparse.Namespace:
         default="請從下列發票圖像中擷取以下欄位資訊，並以 JSON 格式回傳：InvoiceNumber、CompanyName、BuUniformNumber、InvoiceDate、NetAmount、TaxAmount、TotalAmount、TotalAmountCH、VnUniformNumber。",
         help="Api parameter: prompt",
     )
-    parser.add_argument("--max_token", type=int, default=512, help="Api parameter: max token")
+    parser.add_argument("--max_tokens", type=int, default=512, help="Api parameter: max token")
     parser.add_argument("--batch_size", type=int, default=5, help="Run batch inference size")
 
     args = parser.parse_args()
@@ -72,7 +72,7 @@ def call_newsoft_trl_api(
     with tqdm(total=len(unprocessed_images), desc="處理圖片中") as progress_bar:
         for image_paths in batch_generator(unprocessed_images, batch_size=batch_size):
             images = [open(image_path, "rb") for image_path in image_paths]
-            files = {"image": images}
+            files = [("images", image) for image in images]
             data = {
                 "model_name": "lora",
                 "img_type": "png",
