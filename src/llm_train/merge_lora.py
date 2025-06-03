@@ -26,7 +26,7 @@ def arg_parser() -> argparse.Namespace:
 def merge_lora(
     model_name: str,
     output_path: str,
-    lora_model: list,
+    lora_model: str,
     device_map: str = "cuda:0",
 ):
     base_model: PreTrainedModel = AutoModel.from_pretrained(
@@ -37,11 +37,12 @@ def merge_lora(
     tokenizer = AutoProcessor.from_pretrained(pretrained_model_name_or_path=model_name)
 
     print("Start merge model")
-    model = merged_model.merge_and_unload()
+    merged_model = merged_model.merge_and_unload()
+    merged_model.unload()
 
     print("Save model")
     Path(output_path).mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(output_path)
+    merged_model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
 
     print("Success merge lora model and saved")
