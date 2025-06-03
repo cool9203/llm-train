@@ -87,21 +87,28 @@ def v4_compare_with_ans(
             if match_row_key in item_ocr_result:
                 single_dict[f"{match_row_key}_iii"] = str(item_ocr_result[match_row_key])
                 single_dict[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
+                gold_text = str(item_ocr_result[match_row_key]).lower()
+                predict_text = str(matched_row[match_row_key].iloc[0]).lower()
+                gold_text_float = None
+                predict_text_float = None
 
-                if str(item_ocr_result[match_row_key]).lower() == str(matched_row[match_row_key].iloc[0]).lower():
+                if re.fullmatch(r"[\d,]+\.\d+|[\d,]+", gold_text) and re.fullmatch(r"[\d,]+\.\d+|[\d,]+", predict_text):
+                    gold_text_float = float(gold_text.replace(",", ""))
+                    predict_text_float = float(predict_text.replace(",", ""))
+
+                if gold_text == predict_text or (
+                    gold_text_float is not None and predict_text_float is not None and gold_text_float == predict_text_float
+                ):
                     correct_counter[match_row_key]["count"] += 1
                     single_dict[f"{match_row_key}_result"] = 1
                 else:
                     if match_row_key == "InvoiceDate".lower():
-                        if str(item_ocr_result[match_row_key]) == f"中華民國{str(matched_row[match_row_key].iloc[0])}":
+                        if gold_text == f"中華民國{predict_text}":
                             correct_counter[match_row_key]["count"] += 1
                             single_dict[f"{match_row_key}_result"] = 1
                             continue
                     if match_row_key == "TotalAmountCH".lower() and support_cn2an:
                         try:
-                            gold_text = str(item_ocr_result[match_row_key])
-                            predict_text = str(matched_row[match_row_key].iloc[0])
-
                             for find_pattern, target_pattern in _cn2an_replace_vocab.items():
                                 gold_text = re.sub(find_pattern, target_pattern, gold_text)
 
