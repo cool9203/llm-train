@@ -319,7 +319,8 @@ def inference_table(
         __model["model"].set_adapter(model_name)
     elif model_name in ["__base__", __model["name"]]:
         model_name = __model["name"]
-        __model["model"].disable_adapters()
+        if __model.get("adapters", []):
+            __model["model"].disable_adapters()
     else:
         ValueError(f"Not support this model: '{model_name}")
 
