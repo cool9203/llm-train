@@ -18,7 +18,7 @@ except ImportError:
 def arg_parser() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare NewSoft invoice correct")
     parser.add_argument("-i", "--input_path", type=str, required=True, help="Input data path")
-    parser.add_argument("-o", "--output", type=str, required=True, help="Output result filename")
+    parser.add_argument("-o", "--output_path", type=str, required=True, help="Output result filename")
     parser.add_argument("--answer_path", type=str, required=True, help="Answer data path")
 
     args = parser.parse_args()
@@ -77,7 +77,7 @@ def v4_compare_with_ans(
                 single_dict[f"{match_row_key}_iii"] = str(item_ocr_result[match_row_key])
                 single_dict[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
 
-                if str(item_ocr_result[match_row_key]) == str(matched_row[match_row_key].iloc[0]):
+                if str(item_ocr_result[match_row_key]).lower() == str(matched_row[match_row_key].iloc[0]).lower():
                     correct_counter[match_row_key]["count"] += 1
                     single_dict[f"{match_row_key}_result"] = 1
                 else:
