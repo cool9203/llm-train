@@ -3,9 +3,9 @@
 import argparse
 from pathlib import Path
 
-from peft import PeftModel
+from peft import LoraModel, PeftModel
 from transformers import (
-    AutoModel,
+    AutoModelForVision2Seq,
     AutoProcessor,
     PreTrainedModel,
 )
@@ -29,20 +29,19 @@ def merge_lora(
     lora_model: str,
     device_map: str = "cuda:0",
 ):
-    base_model: PreTrainedModel = AutoModel.from_pretrained(
+    base_model: PreTrainedModel = AutoModelForVision2Seq.from_pretrained(
         pretrained_model_name_or_path=model_name,
         device_map=device_map,
     )
-    merged_model = PeftModel.from_pretrained(base_model, lora_model)
+    merged_model: LoraModel = PeftModel.from_pretrained(base_model, lora_model)
     tokenizer = AutoProcessor.from_pretrained(pretrained_model_name_or_path=model_name)
 
     print("Start merge model")
-    merged_model = merged_model.merge_and_unload()
-    merged_model.unload()
+    model = merged_model.merge_and_unload(progressbar=True)
 
     print("Save model")
     Path(output_path).mkdir(parents=True, exist_ok=True)
-    merged_model.save_pretrained(output_path)
+    model.save_pretrained(output_path)
     tokenizer.save_pretrained(output_path)
 
     print("Success merge lora model and saved")
