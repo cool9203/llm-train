@@ -112,7 +112,7 @@ def v4_compare_with_ans(
                                 correct_counter[match_row_key]["count"] += 1
                                 single_dict[f"{match_row_key}_result"] = 1
                             continue
-                        except ValueError:
+                        except (ValueError, KeyError):
                             pass
 
                     single_dict[f"{match_row_key}_result"] = 0
