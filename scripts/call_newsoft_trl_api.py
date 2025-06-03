@@ -104,3 +104,8 @@ def call_newsoft_trl_api(
             progress_bar.update(len(image_paths))
             with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
                 json.dump(all_result, json_file, ensure_ascii=False, indent=4)
+
+
+if __name__ == "__main__":
+    args = arg_parser()
+    call_newsoft_trl_api(**vars(args))
