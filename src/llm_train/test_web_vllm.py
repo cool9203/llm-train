@@ -315,15 +315,14 @@ def inference_table(
         images_io = [io.BytesIO(image) for image in images]
         converted_images = [Image.open(img_io) for img_io in images_io]
         generate_responses = generate(
+            model_name=model_name,
             prompt=prompt,
             system_prompt=system_prompt,
             images=converted_images,
             max_new_tokens=max_tokens,
-            use_cache=True,
             top_p=1.0,
-            top_k=None,
-            do_sample=False,
-            temperature=None,
+            top_k=0,
+            temperature=0.0,
         )
         end_time = time.time()
         used_time = end_time - start_time
