@@ -96,9 +96,10 @@ if __name__ == "__main__":
         **model_kwargs,
     )
 
-    peft_config = get_peft_config(model_args)
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
+    if model_args.use_peft:
+        peft_config = get_peft_config(model_args)
+        model = get_peft_model(model, peft_config)
+        model.print_trainable_parameters()
 
     ################
     # Create a data collator to encode text and image pairs
