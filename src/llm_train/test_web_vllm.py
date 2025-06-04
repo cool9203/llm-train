@@ -109,12 +109,12 @@ def load_model(
 
 def generate(
     model_name: str,
-    image,
+    images: list[Image.Image],
     prompt: str,
     system_prompt: str = _default_system_prompt,
     max_new_tokens: int = 1024,
     **kwds,
-) -> dict[str, str | int]:
+) -> list[dict[str, str | int]]:
     lora_request = None
     lora_modules = [lora_module["name"] for lora_module in __model.get("adapters", [])]
     if model_name and model_name in lora_modules:
@@ -149,18 +149,24 @@ def generate(
             ],
         }
     )
-    image = utils.preprocess_image(
-        image,
-        image_max_pixels=int(os.getenv("IMAGE_MAX_PIXELS", 1631220)),
-        image_min_pixels=int(os.getenv("IMAGE_MIN_PIXELS", 0)),
-    )
+    images = [
+        utils.preprocess_image(
+            image,
+            image_max_pixels=int(os.getenv("IMAGE_MAX_PIXELS", 1631220)),
+            image_min_pixels=int(os.getenv("IMAGE_MIN_PIXELS", 0)),
+        )
+        for image in images
+    ]
     input_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     outputs = model.generate(
-        {
-            "prompt": input_text,
-            "multi_modal_data": {"image": image},
-        },
+        [
+            {
+                "prompt": input_text,
+                "multi_modal_data": {"image": image},
+            }
+            for image in images
+        ],
         SamplingParams(
             max_tokens=max_new_tokens,
             **kwds,
@@ -168,15 +174,17 @@ def generate(
         lora_request=lora_request,
     )
 
-    # Reference: https://github.com/huggingface/transformers/issues/17117#issuecomment-1124497554
-    return {
-        "content": outputs[0].outputs[0].text,
-        "tokens": {
-            "prompt_tokens": len(outputs[0].prompt_token_ids),
-            "completion_tokens": len(outputs[0].outputs[0].token_ids),
-            "total_tokens": len(outputs[0].prompt_token_ids) + len(outputs[0].outputs[0].token_ids),
-        },
-    }
+    return [
+        {
+            "content": output.outputs[0].text,
+            "tokens": {
+                "prompt_tokens": len(output.prompt_token_ids),
+                "completion_tokens": len(output.outputs[0].token_ids),
+                "total_tokens": len(output.prompt_token_ids) + len(output.outputs[0].token_ids),
+            },
+        }
+        for output in outputs
+    ]
 
 
 @app.get("/api/models")
@@ -190,9 +198,42 @@ def get_models():
                 "created": 0,
                 "owned_by": "",
             }
-            for model_id in ["__base__"] + __model["adapters"]
+            for model_id in ["__base__"] + [adapter["name"] for adapter in __model["adapters"]]
         ],
     }
+
+
+@app.post("/api/batch_inference_table")
+def batch_inference_table_api(
+    images: Annotated[list[UploadFile], File()],
+    prompt: Annotated[str, Form()] = _default_prompt,
+    max_tokens: Annotated[int, Form()] = 4096,
+    model_name: Annotated[str, Form()] = None,
+    system_prompt: Annotated[str, Form()] = _default_system_prompt,
+    img_type: Annotated[str, Form()] = "png",
+) -> list[InferenceTableResponse]:
+    try:
+        _images = [image.file.read() for image in images]
+        outputs = inference_table(
+            images=_images,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            model_name=model_name,
+            system_prompt=system_prompt,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    for i in range(len(outputs)):
+        for j in range(len(outputs[i].images)):
+            with io.BytesIO(base64.b64decode(outputs[i].images[j].encode("utf-8"))) as origin_img_io:
+                img: Image.Image = Image.open(origin_img_io)
+                with io.BytesIO() as img_io:
+                    img.save(img_io, format=img_type)
+                    img_b64_str = base64.b64encode(img_io.getvalue()).decode("utf-8")
+                    outputs[i].images[j] = f"data:{img_type};base64,{img_b64_str}"
+
+    return outputs
 
 
 @app.post("/api/inference_table")
@@ -206,12 +247,12 @@ def inference_table_api(
 ) -> InferenceTableResponse:
     try:
         output = inference_table(
-            image=image.file.read(),
+            images=[image.file.read()],
             prompt=prompt,
             max_tokens=max_tokens,
             model_name=model_name,
             system_prompt=system_prompt,
-        )
+        )[0]
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -234,12 +275,12 @@ def inference_table_gradio(
     system_prompt: str = _default_system_prompt,
 ):
     output = inference_table(
-        image=image,
+        images=[image],
         prompt=prompt,
         max_tokens=max_tokens,
         model_name=model_name,
         system_prompt=system_prompt,
-    )
+    )[0]
     return (
         output.origin_content,
         output.html_content,
@@ -251,72 +292,71 @@ def inference_table_gradio(
 
 
 def inference_table(
-    image: str | bytes | Image.Image,
+    images: list[str | bytes | Image.Image],
     prompt: str,
     model_name: str,
     max_tokens: int = 4096,
     system_prompt: str = _default_system_prompt,
     **kwds,
-) -> InferenceTableResponse:
-    if isinstance(image, Image.Image):
-        with io.BytesIO() as img_io:
-            image.save(img_io, format="png")
-            image = img_io.getvalue()
-    elif isinstance(image, str):
-        image = image.encode("utf-8")
+) -> list[InferenceTableResponse]:
+    for i in range(len(images)):
+        if isinstance(images[i], Image.Image):
+            with io.BytesIO() as img_io:
+                images[i].save(img_io, format="png")
+                images[i] = img_io.getvalue()
+        elif isinstance(images[i], str):
+            images[i] = images[i].encode("utf-8")
 
-    origin_responses = list()
+    generate_responses = list()
     used_time = 0
-    prompt_tokens = 0
-    completion_tokens = 0
-    total_tokens = 0
 
     try:
         start_time = time.time()
-        with io.BytesIO(image) as img_io:
-            generate_response = generate(
-                model_name=model_name,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                image=Image.open(img_io),
-                max_new_tokens=max_tokens,
-                use_cache=True,
-                top_p=1.0,
-                top_k=None,
-                do_sample=False,
-                temperature=None,
-            )
+        images_io = [io.BytesIO(image) for image in images]
+        converted_images = [Image.open(img_io) for img_io in images_io]
+        generate_responses = generate(
+            model_name=model_name,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            images=converted_images,
+            max_new_tokens=max_tokens,
+            top_p=1.0,
+            top_k=0,
+            temperature=0.0,
+        )
         end_time = time.time()
-        used_time += end_time - start_time
-        prompt_tokens += generate_response["tokens"]["prompt_tokens"]
-        completion_tokens += generate_response["tokens"]["completion_tokens"]
-        total_tokens += generate_response["tokens"]["total_tokens"]
-        origin_responses.append(generate_response["content"])
+        used_time = end_time - start_time
+        for i in range(len(images_io)):
+            images_io[i].close()
+            converted_images[i].close()
 
-        table_str = "".join(origin_responses)
-        if utils.is_latex_table(table_str):
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="latex")
-        elif utils.is_html_table(table_str):
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="html")
-        else:
-            html_response = pypandoc.convert_text(source=table_str, to="html", format="markdown")
+        for generate_response in generate_responses:
+            if utils.is_latex_table(generate_response["content"]):
+                html_content = pypandoc.convert_text(source=generate_response["content"], to="html", format="latex")
+            elif utils.is_html_table(generate_response["content"]):
+                html_content = pypandoc.convert_text(source=generate_response["content"], to="html", format="html")
+            else:
+                html_content = pypandoc.convert_text(source=generate_response["content"], to="html", format="markdown")
+            generate_response["html_content"] = html_content
 
     except Exception as e:
-        html_response = "推論輸出無法解析"
         traceback.print_exception(e)
 
-    return InferenceTableResponse(
-        origin_content="\n\n".join(origin_responses),
-        html_content=html_response,
-        images=[base64.b64encode(image).decode("utf-8")],
-        model_name=model_name,
-        tokens=UsageToken(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-        ),
-        used_time=used_time,
-    )
+    return [
+        InferenceTableResponse(
+            origin_content=generate_responses[i]["content"],
+            html_content=generate_responses[i].get("html_content", "推論輸出無法解析"),
+            images=[base64.b64encode(images[i]).decode("utf-8")],
+            model_name=model_name,
+            tokens=UsageToken(
+                prompt_tokens=generate_responses[i]["tokens"]["prompt_tokens"],
+                completion_tokens=generate_responses[i]["tokens"]["completion_tokens"],
+                total_tokens=generate_responses[i]["tokens"]["total_tokens"],
+            ),
+            used_time=used_time,
+        )
+        for i in range(len(generate_responses))
+    ]
 
 
 def test_website(
