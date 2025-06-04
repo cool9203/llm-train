@@ -174,7 +174,6 @@ def generate(
         lora_request=lora_request,
     )
 
-    # Reference: https://github.com/huggingface/transformers/issues/17117#issuecomment-1124497554
     return [
         {
             "content": output.outputs[0].text,
@@ -199,7 +198,7 @@ def get_models():
                 "created": 0,
                 "owned_by": "",
             }
-            for model_id in ["__base__"] + __model["adapters"]
+            for model_id in ["__base__"] + [adapter["name"] for adapter in __model["adapters"]]
         ],
     }
 
