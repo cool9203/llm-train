@@ -97,6 +97,7 @@ def load_model(
         model=model_name,
         dtype=torch.bfloat16,
         quantization="bitsandbytes" if load_in_4bit else None,
+        enforce_eager=True,
         enable_lora=True,
     )
 
