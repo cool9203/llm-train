@@ -59,7 +59,7 @@ def v4_compare_with_ans(
 
     df.columns = df.columns.str.lower()
     with Path(input_path).open(mode="r", encoding="utf-8") as f:
-        api_result = json.load(f)
+        api_results = json.load(f)
 
     correct_counter = dict(
         InvoiceNumber=0,
@@ -76,21 +76,20 @@ def v4_compare_with_ans(
 
     print(f"是否支援中文數字轉換: {support_cn2an}")
 
-    all_ary = []
-    for item in api_result:
-        single_dict = {}
-        filename = item["filename"]
-        item_ocr_result = item["api_result"]
-        item_ocr_result = {k.lower(): v for k, v in item["api_result"].items()}
+    compare_results = list()
+    for api_result in api_results:
+        compare_result = dict()
+        filename = api_result["filename"]
+        item_ocr_result = {k.lower(): v for k, v in api_result["api_result"].items()}
         matched_row = df[df["filename"] == filename]
         for match_row_key in matched_row:
             match_row_key = match_row_key.lower()
             if match_row_key == "filename":
-                single_dict[match_row_key] = filename
+                compare_result[match_row_key] = filename
                 continue
             if match_row_key in item_ocr_result:
-                single_dict[f"{match_row_key}_iii"] = str(item_ocr_result[match_row_key])
-                single_dict[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
+                compare_result[f"{match_row_key}_iii"] = str(item_ocr_result[match_row_key])
+                compare_result[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
                 gold_text = str(item_ocr_result[match_row_key]).lower()
                 predict_text = str(matched_row[match_row_key].iloc[0]).lower()
                 gold_text_float = None
@@ -104,12 +103,12 @@ def v4_compare_with_ans(
                     gold_text_float is not None and predict_text_float is not None and gold_text_float == predict_text_float
                 ):
                     correct_counter[match_row_key]["count"] += 1
-                    single_dict[f"{match_row_key}_result"] = 1
+                    compare_result[f"{match_row_key}_result"] = 1
                 else:
                     if match_row_key == "InvoiceDate".lower():
                         if gold_text == f"中華民國{predict_text}":
                             correct_counter[match_row_key]["count"] += 1
-                            single_dict[f"{match_row_key}_result"] = 1
+                            compare_result[f"{match_row_key}_result"] = 1
                             continue
                     if match_row_key == "TotalAmountCH".lower() and support_cn2an:
                         try:
@@ -121,25 +120,25 @@ def v4_compare_with_ans(
 
                             if cn2an.cn2an(gold_text, "smart") == cn2an.cn2an(predict_text, "smart"):
                                 correct_counter[match_row_key]["count"] += 1
-                                single_dict[f"{match_row_key}_result"] = 1
+                                compare_result[f"{match_row_key}_result"] = 1
                             continue
                         except (ValueError, KeyError):
-                            single_dict[f"{match_row_key}_result"] = 1
+                            compare_result[f"{match_row_key}_result"] = 0
 
-                    single_dict[f"{match_row_key}_result"] = 0
+                    compare_result[f"{match_row_key}_result"] = 0
             else:
                 print(match_row_key, item_ocr_result)
-                single_dict[f"{match_row_key}_iii"] = f"沒有這個key值: {match_row_key}"
-                single_dict[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
-                single_dict[f"{match_row_key}_result"] = 0
-        all_ary.append(single_dict)
+                compare_result[f"{match_row_key}_iii"] = f"沒有這個key值: {match_row_key}"
+                compare_result[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
+                compare_result[f"{match_row_key}_result"] = 0
+        compare_results.append(compare_result)
 
     with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
-        json.dump(all_ary, json_file, ensure_ascii=False, indent=4)
+        json.dump(compare_results, json_file, ensure_ascii=False, indent=4)
     print({v["name"]: v["count"] for _, v in correct_counter.items()})
 
     # 將結果轉換為 DataFrame
-    results_df = pd.DataFrame(all_ary)
+    results_df = pd.DataFrame(compare_results)
     results_df.to_csv(str(Path(Path(output_path).stem + ".csv")), index=False, encoding="utf-8")
     results_df.to_excel(Path(Path(output_path).stem + ".xlsx"), index=False, engine="openpyxl")
 
