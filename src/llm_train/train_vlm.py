@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     trainer.train(
         resume_from_checkpoint=True
-        if str(training_args.resume_from_checkpoint).lower == "true"
+        if str(training_args.resume_from_checkpoint).lower() == "true"
         else training_args.resume_from_checkpoint,
     )
 
