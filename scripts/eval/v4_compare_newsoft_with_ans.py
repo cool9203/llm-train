@@ -21,9 +21,10 @@ _cn2an_replace_vocab = OrderedDict(
         # Fix word error
         ("參", "叁"),
         (r"弍|兩", "貳"),
-        (r"o|×", "零"),
+        (r"o|×|0", "零"),
         ("元", ""),
         # Fix cn2an error
+        (r"仟零佰", "零"),
         (r"零$|零[拾佰仟萬]", ""),
     ]
 )
@@ -123,7 +124,7 @@ def v4_compare_with_ans(
                                 single_dict[f"{match_row_key}_result"] = 1
                             continue
                         except (ValueError, KeyError):
-                            pass
+                            single_dict[f"{match_row_key}_result"] = 1
 
                     single_dict[f"{match_row_key}_result"] = 0
             else:
