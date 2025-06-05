@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+from collections import OrderedDict
 from pathlib import Path
 
 import pandas as pd
@@ -15,15 +16,17 @@ try:
 except ImportError:
     support_cn2an = False
 
-_cn2an_replace_vocab = {
-    # Fix word error
-    "參": "叁",
-    r"弍|兩": "貳",
-    r"o|×": "零",
-    "元": "",
-    # Fix cn2an error
-    r"零$|零[拾佰仟萬]": "",
-}
+_cn2an_replace_vocab = OrderedDict(
+    [
+        # Fix word error
+        ("參", "叁"),
+        (r"弍|兩", "貳"),
+        (r"o|×", "零"),
+        ("元", ""),
+        # Fix cn2an error
+        (r"零$|零[拾佰仟萬]", ""),
+    ]
+)
 
 
 def arg_parser() -> argparse.Namespace:
