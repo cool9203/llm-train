@@ -24,8 +24,10 @@ _cn2an_replace_vocab = OrderedDict(
         (r"o|×|0", "零"),
         ("元", ""),
         # Fix cn2an error
-        (r"仟零佰", "零"),
+        (r"仟零佰", "仟零"),
+        (r"零拾(?=[壹貳叁肆伍陸柒捌玖])", "零"),
         (r"零$|零[拾佰仟萬]", ""),
+        (r"仟(?=[壹貳叁肆伍陸柒捌玖]拾)", "仟零"),
     ]
 )
 
@@ -87,9 +89,12 @@ def v4_compare_with_ans(
             if match_row_key == "filename":
                 compare_result[match_row_key] = filename
                 continue
+
+            compare_result[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
+            compare_result[f"{match_row_key}_iii"] = str(item_ocr_result.get(match_row_key, f"沒有這個key值: {match_row_key}"))
+            compare_result[f"{match_row_key}_result"] = 0
+
             if match_row_key in item_ocr_result:
-                compare_result[f"{match_row_key}_iii"] = str(item_ocr_result[match_row_key])
-                compare_result[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
                 gold_text = str(item_ocr_result[match_row_key]).lower()
                 predict_text = str(matched_row[match_row_key].iloc[0]).lower()
                 gold_text_float = None
@@ -102,14 +107,11 @@ def v4_compare_with_ans(
                 if gold_text == predict_text or (
                     gold_text_float is not None and predict_text_float is not None and gold_text_float == predict_text_float
                 ):
-                    correct_counter[match_row_key]["count"] += 1
                     compare_result[f"{match_row_key}_result"] = 1
                 else:
                     if match_row_key == "InvoiceDate".lower():
                         if gold_text == f"中華民國{predict_text}":
-                            correct_counter[match_row_key]["count"] += 1
                             compare_result[f"{match_row_key}_result"] = 1
-                            continue
                     if match_row_key == "TotalAmountCH".lower() and support_cn2an:
                         try:
                             for find_pattern, target_pattern in _cn2an_replace_vocab.items():
@@ -119,18 +121,15 @@ def v4_compare_with_ans(
                                 predict_text = re.sub(find_pattern, target_pattern, predict_text)
 
                             if cn2an.cn2an(gold_text, "smart") == cn2an.cn2an(predict_text, "smart"):
-                                correct_counter[match_row_key]["count"] += 1
                                 compare_result[f"{match_row_key}_result"] = 1
-                            continue
                         except (ValueError, KeyError):
-                            compare_result[f"{match_row_key}_result"] = 0
-
-                    compare_result[f"{match_row_key}_result"] = 0
+                            pass
             else:
                 print(match_row_key, item_ocr_result)
-                compare_result[f"{match_row_key}_iii"] = f"沒有這個key值: {match_row_key}"
-                compare_result[f"{match_row_key}_ans"] = str(matched_row[match_row_key].iloc[0])
-                compare_result[f"{match_row_key}_result"] = 0
+
+            if compare_result[f"{match_row_key}_result"] == 1:
+                correct_counter[match_row_key]["count"] += 1
+
         compare_results.append(compare_result)
 
     with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
