@@ -35,7 +35,7 @@ _cn2an_replace_vocab = OrderedDict(
 def arg_parser() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare NewSoft invoice correct")
     parser.add_argument("-i", "--input_path", type=str, required=True, help="Input data path")
-    parser.add_argument("-o", "--output_path", type=str, required=True, help="Output result filename")
+    parser.add_argument("-o", "--output_path", type=str, default=None, help="Output result filename")
     parser.add_argument("--answer_path", type=str, required=True, help="Answer data path")
 
     args = parser.parse_args()
@@ -46,7 +46,7 @@ def arg_parser() -> argparse.Namespace:
 def v4_compare_with_ans(
     answer_path: os.PathLike,
     input_path: os.PathLike,
-    output_path: os.PathLike,
+    output_path: os.PathLike = None,
 ):
     if Path(answer_path).suffix == ".xlsx":
         df = pd.read_excel(answer_path)
@@ -132,14 +132,15 @@ def v4_compare_with_ans(
 
         compare_results.append(compare_result)
 
-    with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
-        json.dump(compare_results, json_file, ensure_ascii=False, indent=4)
-    print({v["name"]: v["count"] for _, v in correct_counter.items()})
+    if output_path:
+        with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
+            json.dump(compare_results, json_file, ensure_ascii=False, indent=4)
+        print({v["name"]: v["count"] for _, v in correct_counter.items()})
 
-    # 將結果轉換為 DataFrame
-    results_df = pd.DataFrame(compare_results)
-    results_df.to_csv(str(Path(Path(output_path).stem + ".csv")), index=False, encoding="utf-8")
-    results_df.to_excel(Path(Path(output_path).stem + ".xlsx"), index=False, engine="openpyxl")
+        # 將結果轉換為 DataFrame
+        results_df = pd.DataFrame(compare_results)
+        results_df.to_csv(str(Path(Path(output_path).stem + ".csv")), index=False, encoding="utf-8")
+        results_df.to_excel(Path(Path(output_path).stem + ".xlsx"), index=False, engine="openpyxl")
 
 
 if __name__ == "__main__":
