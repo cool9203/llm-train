@@ -99,6 +99,7 @@ def load_model(
         dtype=torch.bfloat16,
         quantization="bitsandbytes" if load_in_4bit else None,
         enforce_eager=True,
+        max_model_len=32768,
         enable_lora=enable_lora,
     )
 
