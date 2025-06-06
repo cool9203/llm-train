@@ -47,7 +47,7 @@ def call_newsoft_trl_api(
     max_tokens: int = 512,
     batch_size: int = 5,
 ):
-    output_path = Path(output_path) if str(output_path).endswith(".json") else Path(str(output_path)[:-5])
+    output_path = Path(output_path) if not str(output_path).endswith(".json") else Path(str(output_path)[:-5])
     # 處理圖片前, 先取得過往已處理的資料
     existing_results = list()
     if output_path.exists():
