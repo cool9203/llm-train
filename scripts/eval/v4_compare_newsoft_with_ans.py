@@ -21,7 +21,7 @@ _cn2an_replace_vocab = OrderedDict(
         # Fix word error
         ("參", "叁"),
         (r"弍|兩", "貳"),
-        (r"o|×|0", "零"),
+        (r"o|×|0|一", "零"),
         ("元", ""),
         # Fix cn2an error
         (r"仟零佰", "仟零"),
