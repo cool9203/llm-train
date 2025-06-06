@@ -132,10 +132,11 @@ def v4_compare_with_ans(
 
         compare_results.append(compare_result)
 
+    print({v["name"]: v["count"] for _, v in correct_counter.items()})
+
     if output_path:
         with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
             json.dump(compare_results, json_file, ensure_ascii=False, indent=4)
-        print({v["name"]: v["count"] for _, v in correct_counter.items()})
 
         # 將結果轉換為 DataFrame
         results_df = pd.DataFrame(compare_results)
