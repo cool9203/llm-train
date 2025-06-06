@@ -92,13 +92,14 @@ class InferenceTableResponse(BaseModel):
 def load_model(
     model_name: str,
     load_in_4bit: bool = False,
+    enable_lora: bool = False,
 ) -> tuple[LLM, ProcessorMixin | PreTrainedTokenizer]:
     model: LLM = LLM(
         model=model_name,
         dtype=torch.bfloat16,
         quantization="bitsandbytes" if load_in_4bit else None,
         enforce_eager=True,
-        enable_lora=True,
+        enable_lora=enable_lora,
     )
 
     tokenizer = AutoProcessor.from_pretrained(
@@ -382,6 +383,8 @@ def test_website(
         formatted_lora_modules.clear()
         for lora_module in lora_modules:
             lora_module_split = lora_module.split("=")
+            if not Path(lora_module_split[1]).exists():
+                raise FileNotFoundError(f"Not found lora path: '{lora_module_split[1]}'")
             formatted_lora_modules.append(
                 {
                     "name": lora_module_split[0],
@@ -394,6 +397,7 @@ def test_website(
     (__model["model"], __model["tokenizer"]) = load_model(
         model_name=model_name,
         load_in_4bit=kwds.get("load_in_4bit", False),
+        enable_lora=True if formatted_lora_modules else False,
     )
     __model["name"] = model_name
     __model["adapters"] = formatted_lora_modules
