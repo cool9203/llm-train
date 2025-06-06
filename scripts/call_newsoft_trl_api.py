@@ -47,11 +47,12 @@ def call_newsoft_trl_api(
     max_tokens: int = 512,
     batch_size: int = 5,
 ):
+    output_path = Path(output_path) if str(output_path).endswith(".json") else Path(str(output_path)[:-5])
     # 處理圖片前, 先取得過往已處理的資料
     existing_results = list()
-    if Path(output_path).exists():
+    if output_path.exists():
         try:
-            with open(output_path, "r", encoding="utf-8") as json_file:
+            with output_path.open(mode="r", encoding="utf-8") as json_file:
                 existing_results = json.load(json_file)
         except Exception:
             existing_results = list()
@@ -102,7 +103,7 @@ def call_newsoft_trl_api(
                 images[i].close()
 
             progress_bar.update(len(image_paths))
-            with Path(Path(output_path).stem + ".json").open(mode="w", encoding="utf-8") as json_file:
+            with output_path.open(mode="w", encoding="utf-8") as json_file:
                 json.dump(all_result, json_file, ensure_ascii=False, indent=4)
 
 
