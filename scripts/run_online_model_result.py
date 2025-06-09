@@ -4,16 +4,18 @@ import argparse
 import ast
 import base64
 import datetime as dt
+import hashlib
+import json
 import logging
 import os
 import pprint
 import time
-from os import PathLike
 from pathlib import Path
 
 import openai
 import tqdm as TQDM
 from openai.types.chat import ChatCompletion
+from tenacity import Retrying, after_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler())
@@ -31,15 +33,19 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "--api_key",
         type=str,
-        default=os.getenv("API_KEY", ""),
-        help="Online model api key, can set in ENV with API_KEY",
+        default=None,
+        help="Online model api key, can set in ENV with XXX_API_KEY, ex: OPENAI_API_KEY",
     )
     parser.add_argument("--provider", type=str, required=True, help="Model provider")
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
-    parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
     parser.add_argument("--prompt", type=str, required=True, help="Model prompt")
+    parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
     parser.add_argument("--system_prompt", type=str, default="", help="Model system prompt")
-    parser.add_argument("--inference_result_folder", type=str, required=True, help="Save inference result folder name")
+    parser.add_argument("--inference_result_folder", type=str, default=None, help="Save inference result folder name")
+    parser.add_argument(
+        "--reasoning_effort", type=str, default="low", choices=["low", "medium", "high"], help="Reasoning budgets"
+    )
+    parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
     args = parser.parse_args()
 
@@ -48,46 +54,74 @@ def arg_parser() -> argparse.Namespace:
 
 def run_online_model_result(
     dataset_path: list[str],
-    api_key: str,
+    api_key: str | None,
     model_name: str,
     provider: str,
     prompt: str,
-    inference_result_folder: str,
+    reasoning_effort: str = "low",
+    inference_result_folder: str = None,
     system_prompt: str = "",
     max_tokens: int = 512,
+    retry: int = 3,
     tqdm: bool = True,
     **kwds,
-):
+) -> None:
+    hash_md5 = hashlib.md5(
+        str(
+            dict(
+                provider=provider,
+                model_name=model_name,
+                reasoning_effort=reasoning_effort,
+                system_prompt=system_prompt,
+                prompt=prompt,
+            )
+        ).encode("utf-8")
+    )
+    inference_result_folder = (
+        inference_result_folder
+        if inference_result_folder
+        else f"{provider}-{model_name}-{reasoning_effort}-{hash_md5.hexdigest()[:16]}"
+    )
+    api_key = api_key if api_key else os.getenv(f"{provider}_API_KEY".upper(), "")
+    assert api_key, "Not pass or set 'api_key'"
+
     client = openai.Client(
         base_url=_provider.get(provider, provider),
         api_key=api_key,
+        max_retries=0,
         **kwds,
     )
 
-    data: list[tuple[PathLike, PathLike]] = list()
+    # Check model_name is exist
+    try:
+        for attempt in Retrying(
+            reraise=True,
+            stop=stop_after_attempt(retry),
+            wait=wait_exponential(multiplier=1),
+            retry=retry_if_exception_type(openai.RateLimitError),
+            after=after_log(logger=logger, log_level=logging.INFO),
+        ):
+            with attempt:
+                client.models.retrieve(model_name)
+    except (openai.NotFoundError, openai.BadRequestError) as e:
+        if isinstance(e, openai.NotFoundError):
+            raise ValueError("沒有該模型")
+        else:
+            raise ValueError("API KEY 錯誤")
+
+    image_filepaths: list[Path] = list()
 
     # Pre-check dataset are correct pairs for label txt data and image data
     for filepath in Path(dataset_path).iterdir():
-        if filepath.suffix.lower() not in [".jpg", ".jpeg", ".png"]:
+        if filepath.is_dir() or filepath.suffix.lower() not in [".jpg", ".jpeg", ".png"]:
             continue
-        if inference_result_folder:
-            data.append(
-                (
-                    filepath,
-                    Path(Path(dataset_path), inference_result_folder, f"{filepath.stem}"),
-                )
-            )
-        else:
-            data.append(
-                (
-                    filepath,
-                    Path(Path(dataset_path), f"{filepath.stem}"),
-                )
-            )
-    logger.debug(f"data: {data}")
+        image_filepaths.append(filepath)
+    image_filepaths.sort()
+    logger.debug(f"data: {image_filepaths}")
 
     # Eval
-    for image_filepath, inference_filepath in TQDM.tqdm(data, desc="Eval", smoothing=0) if tqdm else data:
+    for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
+        inference_filepath = Path(Path(dataset_path), inference_result_folder, f"{image_filepath.stem}")
         if not Path(str(inference_filepath) + ".txt").exists() or not Path(str(inference_filepath) + ".html").exists():
             logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
@@ -113,18 +147,42 @@ def run_online_model_result(
                     }
                 )
 
-            responses: ChatCompletion = client.chat.completions.create(
-                messages=messages,
-                model=model_name,
-                max_completion_tokens=max_tokens,
-                top_p=1.0,
-                temperature=0.0,
+            try:
+                for attempt in Retrying(
+                    reraise=True,
+                    stop=stop_after_attempt(retry),
+                    wait=wait_exponential(multiplier=10),
+                    retry=retry_if_exception_type(openai.RateLimitError),
+                    after=after_log(logger=logger, log_level=logging.INFO),
+                ):
+                    with attempt:
+                        start_time = time.time()
+                        responses: ChatCompletion = client.chat.completions.create(
+                            messages=messages,
+                            model=model_name,
+                            max_completion_tokens=max_tokens,
+                            reasoning_effort=reasoning_effort,
+                            top_p=1.0,
+                        )
+                        end_time = time.time()
+            except Exception as e:
+                raise e
+
+            result = dict(
+                generate_content=responses.choices[0].message.content,
+                usage=responses.usage.model_dump(),
+                time=end_time - start_time,
             )
-            generate_content = responses.choices[0].message.content
 
             Path(inference_filepath).parent.mkdir(exist_ok=True, parents=True)
             with Path(str(inference_filepath) + ".txt").open("w", encoding="utf-8") as f:
-                f.write(generate_content)
+                f.write(
+                    json.dumps(
+                        obj=result,
+                        ensure_ascii=False,
+                        indent=4,
+                    )
+                )
 
             time.sleep(1)
 
