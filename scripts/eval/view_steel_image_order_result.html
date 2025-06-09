@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>圖片與 TXT 檢視器</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        img {
+            max-width: 500px;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>選擇資料夾與 inference 資料夾名稱</h2>
+    <label>
+        Inference 資料夾名稱:
+        <input type="text" id="inferenceFolderInput" placeholder="例如 inference_folder_name" />
+    </label>
+    <br /><br />
+    <input type="file" id="folderInput" webkitdirectory multiple />
+    <br /><br />
+
+    <label for="classSelect">選擇類別資料夾：</label>
+    <select id="classSelect" onchange="onClassChange()"></select>
+
+    <label for="imageSelect">選擇圖片：</label>
+    <select id="imageSelect" onchange="onImageChange()"></select>
+    <br /><br />
+
+    <div id="display">
+        <img id="image" src="" alt="圖片尚未載入" />
+        <textarea id="textContent" readonly></textarea>
+    </div>
+
+    <script>
+        let filesMap = {}; // { className: [ { image, text, name } ] }
+        let classKeys = [];
+        let currentClassIndex = 0;
+        let currentImageIndex = 0;
+
+        const classSelect = document.getElementById("classSelect");
+        const imageSelect = document.getElementById("imageSelect");
+
+        document.getElementById('folderInput').addEventListener('change', handleFiles);
+
+        function handleFiles(event) {
+            const inferenceFolderName = document.getElementById("inferenceFolderInput").value.trim();
+            if (!inferenceFolderName) {
+                alert("請輸入 inference 資料夾名稱！");
+                return;
+            }
+
+            const files = Array.from(event.target.files);
+            filesMap = {};
+
+            for (const file of files) {
+                const pathParts = file.webkitRelativePath.split('/');
+                const className = pathParts[1]; // assumes: ./data_path/file.jpg
+                if (!filesMap[className]) filesMap[className] = {};
+
+                const fileName = pathParts[pathParts.length - 1];
+                const baseName = fileName.split('.').slice(0, -1).join('.');
+
+                if (!filesMap[className][baseName]) filesMap[className][baseName] = { name: baseName };
+
+                if (file.type.startsWith("image/")) {
+                    filesMap[className][baseName].image = file;
+                } else if (file.name.endsWith('.txt') && pathParts.includes(inferenceFolderName)) {
+                    filesMap[className][baseName].text = file;
+                }
+            }
+
+            for (const className in filesMap) {
+                filesMap[className] = Object.values(filesMap[className])
+                    .filter(entry => entry.image); // only keep entries with images
+            }
+
+            classKeys = Object.keys(filesMap).sort();
+            populateClassSelect();
+            onClassChange(); // Load first class
+        }
+
+        function populateClassSelect() {
+            classSelect.innerHTML = '';
+            classKeys.forEach((className, idx) => {
+                const option = document.createElement('option');
+                option.value = idx;
+                option.textContent = className;
+                classSelect.appendChild(option);
+            });
+        }
+
+        function onClassChange() {
+            currentClassIndex = parseInt(classSelect.value);
+            currentImageIndex = 0;
+            populateImageSelect();
+            showCurrent();
+        }
+
+        function populateImageSelect() {
+            const className = classKeys[currentClassIndex];
+            const entries = filesMap[className];
+            imageSelect.innerHTML = '';
+
+            entries.forEach((entry, idx) => {
+                const option = document.createElement('option');
+                option.value = idx;
+                option.textContent = entry.name;
+                imageSelect.appendChild(option);
+            });
+        }
+
+        function onImageChange() {
+            currentImageIndex = parseInt(imageSelect.value);
+            showCurrent();
+        }
+
+        function showCurrent() {
+            const className = classKeys[currentClassIndex];
+            const entry = filesMap[className][currentImageIndex];
+            const imgURL = URL.createObjectURL(entry.image);
+            document.getElementById("image").src = imgURL;
+
+            if (entry.text) {
+                entry.text.text().then(content => {
+                    document.getElementById("textContent").value = JSON.parse(content).generate_content;
+                });
+            } else {
+                document.getElementById("textContent").value = "找不到對應的文字檔案。";
+            }
+        }
+    </script>
+</body>
+
+</html>
