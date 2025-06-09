@@ -10,6 +10,7 @@ import logging
 import os
 import pprint
 import time
+from collections import OrderedDict
 from pathlib import Path
 
 import openai
@@ -66,9 +67,9 @@ def run_online_model_result(
     tqdm: bool = True,
     **kwds,
 ) -> None:
-    hash_md5 = hashlib.md5(
+    hash_md5 = hashlib.sha256(
         str(
-            dict(
+            OrderedDict(
                 provider=provider,
                 model_name=model_name,
                 reasoning_effort=reasoning_effort,
