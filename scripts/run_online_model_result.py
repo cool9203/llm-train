@@ -82,10 +82,13 @@ def run_online_model_result(
         logger.info(f"hash_value: {hash_value}")
         inference_result_folder = f"{provider}-{model_name}-{reasoning_effort}-{hash_value}"
     api_key = api_key if api_key else os.getenv(f"{provider}_API_KEY".upper(), "")
-    output_path = Path(output_path if output_path else Path(dataset_path).parent) / Path(dataset_path).name
+    output_path: Path = (
+        Path(output_path if output_path else Path(dataset_path).parent) / Path(dataset_path).name / inference_result_folder
+    )
     assert api_key, "Not pass or set 'api_key'"
 
-    with Path(output_path, inference_result_folder, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
+    output_path.mkdir(parents=True, exist_ok=False)
+    with Path(output_path, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
         f.write(
             json.dumps(
                 obj=run_task_info,
@@ -130,7 +133,7 @@ def run_online_model_result(
 
     # Eval
     for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
-        inference_filepath = Path(output_path, inference_result_folder, f"{image_filepath.stem}")
+        inference_filepath = Path(output_path, f"{image_filepath.stem}")
         if not Path(str(inference_filepath) + ".txt").exists() or not Path(str(inference_filepath) + ".html").exists():
             logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
@@ -183,7 +186,6 @@ def run_online_model_result(
                 time=end_time - start_time,
             )
 
-            Path(inference_filepath).parent.mkdir(exist_ok=True, parents=True)
             with Path(str(inference_filepath) + ".txt").open("w", encoding="utf-8") as f:
                 f.write(
                     json.dumps(
