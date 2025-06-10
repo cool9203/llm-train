@@ -59,6 +59,7 @@ def run_online_model_result(
     model_name: str,
     provider: str,
     prompt: str,
+    output_path: str = None,
     reasoning_effort: str = "low",
     inference_result_folder: str = None,
     system_prompt: str = "",
@@ -67,24 +68,31 @@ def run_online_model_result(
     tqdm: bool = True,
     **kwds,
 ) -> None:
-    hash_md5 = hashlib.sha256(
-        str(
-            OrderedDict(
-                provider=provider,
-                model_name=model_name,
-                reasoning_effort=reasoning_effort,
-                system_prompt=system_prompt,
-                prompt=prompt,
-            )
-        ).encode("utf-8")
+    run_task_info = OrderedDict(
+        provider=provider,
+        model_name=model_name,
+        reasoning_effort=reasoning_effort,
+        system_prompt=system_prompt,
+        prompt=prompt,
     )
-    inference_result_folder = (
-        inference_result_folder
-        if inference_result_folder
-        else f"{provider}-{model_name}-{reasoning_effort}-{hash_md5.hexdigest()[:16]}"
-    )
+
+    if not inference_result_folder:
+        hash_md5 = hashlib.sha256(str(run_task_info).encode("utf-8"))
+        hash_value = hash_md5.hexdigest()[:16]
+        logger.info(f"hash_value: {hash_value}")
+        inference_result_folder = f"{provider}-{model_name}-{reasoning_effort}-{hash_value}"
     api_key = api_key if api_key else os.getenv(f"{provider}_API_KEY".upper(), "")
+    output_path = Path(output_path if output_path else Path(dataset_path).parent) / Path(dataset_path).name
     assert api_key, "Not pass or set 'api_key'"
+
+    with Path(output_path, inference_result_folder, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
+        f.write(
+            json.dumps(
+                obj=run_task_info,
+                ensure_ascii=False,
+                indent=4,
+            )
+        )
 
     client = openai.Client(
         base_url=_provider.get(provider, provider),
@@ -122,7 +130,7 @@ def run_online_model_result(
 
     # Eval
     for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
-        inference_filepath = Path(Path(dataset_path), inference_result_folder, f"{image_filepath.stem}")
+        inference_filepath = Path(output_path, inference_result_folder, f"{image_filepath.stem}")
         if not Path(str(inference_filepath) + ".txt").exists() or not Path(str(inference_filepath) + ".html").exists():
             logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
