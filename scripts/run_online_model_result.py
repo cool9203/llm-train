@@ -46,6 +46,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "--reasoning_effort", type=str, default="low", choices=["low", "medium", "high"], help="Reasoning budgets"
     )
+    parser.add_argument("--force_rerun", action="store_true", help="Force rerun")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
     args = parser.parse_args()
@@ -63,15 +64,17 @@ def run_online_model_result(
     reasoning_effort: str = "low",
     inference_result_folder: str = None,
     system_prompt: str = "",
-    max_tokens: int = 512,
+    max_tokens: int = 16384,
     retry: int = 3,
     tqdm: bool = True,
+    force_rerun: bool = True,
     **kwds,
 ) -> None:
     run_task_info = OrderedDict(
         provider=provider,
         model_name=model_name,
         reasoning_effort=reasoning_effort,
+        max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
     )
@@ -140,12 +143,13 @@ def run_online_model_result(
     for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
         inference_filepath = Path(output_path, f"{image_filepath.stem}")
         inference_filepath_exist = False
-        for extension in [".txt", ".html", ".json"]:
-            if Path(f"{inference_filepath!s}{extension}").exists():
-                inference_filepath_exist = True
-                break
-        if inference_filepath_exist:
-            continue
+        if not force_rerun:
+            for extension in [".txt", ".html", ".json"]:
+                if Path(f"{inference_filepath!s}{extension}").exists():
+                    inference_filepath_exist = True
+                    break
+            if inference_filepath_exist:
+                continue
 
         logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
