@@ -87,15 +87,20 @@ def run_online_model_result(
     )
     assert api_key, "Not pass or set 'api_key'"
 
-    output_path.mkdir(parents=True, exist_ok=False)
-    with Path(output_path, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
-        f.write(
-            json.dumps(
-                obj=run_task_info,
-                ensure_ascii=False,
-                indent=4,
+    if output_path.exists():
+        with Path(output_path, ".task_info.txt").open(mode="r", encoding="utf-8") as f:
+            exist_task_info = json.load(fp=f)
+        assert run_task_info != exist_task_info, f"inference_result_folder: '{inference_result_folder}' 發生衝突, 請重新給定名稱"
+    else:
+        output_path.mkdir(parents=True, exist_ok=False)
+        with Path(output_path, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    obj=run_task_info,
+                    ensure_ascii=False,
+                    indent=4,
+                )
             )
-        )
 
     client = openai.Client(
         base_url=_provider.get(provider, provider),
@@ -134,68 +139,74 @@ def run_online_model_result(
     # Eval
     for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
         inference_filepath = Path(output_path, f"{image_filepath.stem}")
-        if not Path(str(inference_filepath) + ".txt").exists() or not Path(str(inference_filepath) + ".html").exists():
-            logger.debug(f"Call api date: {dt.datetime.now()!s}")
+        inference_filepath_exist = False
+        for extension in [".txt", ".html", ".json"]:
+            if Path(f"{inference_filepath!s}{extension}").exists():
+                inference_filepath_exist = True
+                break
+        if inference_filepath_exist:
+            continue
 
-            messages = list()
+        logger.debug(f"Call api date: {dt.datetime.now()!s}")
 
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
+        messages = list()
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
 
-            with Path(image_filepath).open(mode="rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}",
-                                },
+        with Path(image_filepath).open(mode="rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
                             },
-                            {"type": "text", "text": prompt},
-                        ],
-                    }
-                )
-
-            try:
-                for attempt in Retrying(
-                    reraise=True,
-                    stop=stop_after_attempt(retry),
-                    wait=wait_exponential(multiplier=10),
-                    retry=retry_if_exception_type(openai.RateLimitError),
-                    after=after_log(logger=logger, log_level=logging.INFO),
-                ):
-                    with attempt:
-                        start_time = time.time()
-                        responses: ChatCompletion = client.chat.completions.create(
-                            messages=messages,
-                            model=model_name,
-                            max_completion_tokens=max_tokens,
-                            reasoning_effort=reasoning_effort,
-                            top_p=1.0,
-                        )
-                        end_time = time.time()
-            except Exception as e:
-                raise e
-
-            result = dict(
-                generate_content=responses.choices[0].message.content,
-                usage=responses.usage.model_dump(),
-                time=end_time - start_time,
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                }
             )
 
-            with Path(str(inference_filepath) + ".txt").open("w", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        obj=result,
-                        ensure_ascii=False,
-                        indent=4,
+        try:
+            for attempt in Retrying(
+                reraise=True,
+                stop=stop_after_attempt(retry),
+                wait=wait_exponential(multiplier=10),
+                retry=retry_if_exception_type(openai.RateLimitError),
+                after=after_log(logger=logger, log_level=logging.INFO),
+            ):
+                with attempt:
+                    start_time = time.time()
+                    responses: ChatCompletion = client.chat.completions.create(
+                        messages=messages,
+                        model=model_name,
+                        max_completion_tokens=max_tokens,
+                        reasoning_effort=reasoning_effort,
+                        top_p=1.0,
                     )
-                )
+                    end_time = time.time()
+        except Exception as e:
+            raise e
 
-            time.sleep(1)
+        result = dict(
+            generate_content=responses.choices[0].message.content,
+            usage=responses.usage.model_dump(),
+            time=end_time - start_time,
+        )
+
+        with Path(str(inference_filepath) + ".txt").open("w", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    obj=result,
+                    ensure_ascii=False,
+                    indent=4,
+                )
+            )
+
+        time.sleep(1)
 
 
 if __name__ == "__main__":
