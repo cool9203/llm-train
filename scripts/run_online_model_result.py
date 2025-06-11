@@ -47,7 +47,9 @@ def arg_parser() -> argparse.Namespace:
         "--reasoning_effort", type=str, default="low", choices=["low", "medium", "high"], help="Reasoning budgets"
     )
     parser.add_argument("--icl_example_path", type=str, default=None, help="In context learning example path")
-    parser.add_argument("--icl_example_quantity", type=int, default=1, help="In context learning example use quantity")
+    parser.add_argument(
+        "--icl_example_quantity", type=int, default=1, help="In context learning example use quantity, set -1 are all use"
+    )
     parser.add_argument("--force_rerun", action="store_true", help="Force rerun")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
@@ -87,7 +89,7 @@ def load_icl_example(
     icl_example_data: list[dict[str, str]] = list()
     icl_example_data_info: list[dict[str, str]] = list()
     for icl_image_path in icl_example_iter_data:
-        if len(icl_example_data) >= icl_example_quantity:
+        if icl_example_quantity >= 0 and len(icl_example_data) >= icl_example_quantity:
             break
 
         icl_text_path = None
