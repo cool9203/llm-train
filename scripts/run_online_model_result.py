@@ -65,6 +65,69 @@ def get_base64_image(image_path: os.PathLike) -> str:
         return f"data:image/{extension};base64,{base64_image}"
 
 
+def load_icl_example(
+    icl_example_path: os.PathLike,
+    icl_example_quantity: int,
+    find_extensions: list = [".txt", ".json"],
+) -> tuple[
+    list[dict[str, str]],
+    list[dict[str, str]],
+]:
+    icl_example_path: Path = Path(icl_example_path)
+    icl_example_iter_data = (
+        list(
+            icl_image_path
+            for icl_image_path in icl_example_path.iterdir()
+            if icl_image_path.suffix.lower() in [".jpg", ".jpeg", ".png"]
+        )
+        if icl_example_path
+        else []
+    )
+    icl_example_iter_data.sort()
+    icl_example_data: list[dict[str, str]] = list()
+    icl_example_data_info: list[dict[str, str]] = list()
+    for icl_image_path in icl_example_iter_data:
+        if len(icl_example_data) >= icl_example_quantity:
+            break
+
+        icl_text_path = None
+        for extension in find_extensions:
+            if Path(icl_example_path, f"{icl_image_path.stem}{extension}").exists():
+                icl_text_path = Path(icl_example_path, f"{icl_image_path.stem}{extension}")
+        if icl_text_path:
+            logger.info(f"Usage example: {icl_image_path!s}")
+            with icl_image_path.open(mode="r", encoding="utf-8") as f:
+                icl_base64_image = get_base64_image(icl_image_path)
+                icl_text = f.read()
+                icl_example_data.append(
+                    dict(
+                        image_path=str(icl_image_path),
+                        txt_path=str(icl_text_path),
+                        base64_image=icl_base64_image,
+                        text=icl_text,
+                    )
+                )
+                icl_example_hash_md5 = hashlib.sha256(
+                    str(
+                        dict(
+                            base64_image=icl_base64_image,
+                            text=icl_text,
+                        )
+                    ).encode("utf-8")
+                )
+                icl_example_data_info.append(
+                    dict(
+                        image_path=str(icl_image_path),
+                        txt_path=str(icl_text_path),
+                        context_hash=icl_example_hash_md5.hexdigest(),
+                    )
+                )
+    return (
+        icl_example_data,
+        icl_example_data_info,
+    )
+
+
 def run_online_model_result(
     dataset_path: str,
     api_key: str | None,
@@ -95,46 +158,10 @@ def run_online_model_result(
         icl_example_path = None
 
     # Get in context learning data
-    icl_example_iter_data = list(icl_example_path.iterdir()) if icl_example_path else []
-    icl_example_iter_data.sort()
-    icl_example_data: list[dict[str, str]] = list()
-    icl_example_data_hash: list[dict[str, str]] = list
-    for icl_image_path in icl_example_iter_data:
-        if len(icl_example_data) >= icl_example_quantity:
-            break
-
-        icl_text_path = None
-        for extension in [".txt", ".json"]:
-            if Path(icl_example_path, f"{icl_image_path.stem}{extension}").exists():
-                icl_text_path = Path(icl_example_path, f"{icl_image_path.stem}{extension}")
-        if icl_text_path:
-            logger.info(f"Usage example: {icl_image_path!s}")
-            with icl_image_path.open(mode="r", encoding="utf-8") as f:
-                icl_base64_image = get_base64_image(icl_image_path)
-                icl_text = f.read()
-                icl_example_data.append(
-                    dict(
-                        image_path=str(icl_image_path),
-                        txt_path=str(icl_text_path),
-                        base64_image=icl_base64_image,
-                        text=icl_text,
-                    )
-                )
-                icl_example_hash_md5 = hashlib.sha256(
-                    str(
-                        dict(
-                            base64_image=icl_base64_image,
-                            text=icl_text,
-                        )
-                    ).encode("utf-8")
-                )
-                icl_example_data_hash.append(
-                    dict(
-                        image_path=str(icl_image_path),
-                        txt_path=str(icl_text_path),
-                        data_hash=icl_example_hash_md5.hexdigest(),
-                    )
-                )
+    (icl_example_data, icl_example_data_info) = load_icl_example(
+        icl_example_path=icl_example_path,
+        icl_example_quantity=icl_example_quantity,
+    )
 
     run_task_info = OrderedDict(
         provider=provider,
@@ -143,7 +170,7 @@ def run_online_model_result(
         max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
-        icl_example=str(icl_example_data_hash),
+        icl_example=str(icl_example_data_info),
     )
 
     if not inference_result_folder:
