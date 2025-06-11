@@ -96,7 +96,7 @@ def load_icl_example(
                 icl_text_path = Path(icl_example_path, f"{icl_image_path.stem}{extension}")
         if icl_text_path:
             logger.info(f"Usage example: {icl_image_path!s}")
-            with icl_image_path.open(mode="r", encoding="utf-8") as f:
+            with icl_text_path.open(mode="r", encoding="utf-8") as f:
                 icl_base64_image = get_base64_image(icl_image_path)
                 icl_text = f.read()
                 icl_example_data.append(
@@ -170,7 +170,7 @@ def run_online_model_result(
         max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
-        icl_example=str(icl_example_data_info),
+        icl_example=icl_example_data_info,
     )
 
     if not inference_result_folder:
@@ -185,7 +185,9 @@ def run_online_model_result(
     if output_path.exists():
         with Path(output_path, ".task_info.txt").open(mode="r", encoding="utf-8") as f:
             exist_task_info = json.load(fp=f)
-        assert run_task_info != exist_task_info, f"inference_result_folder: '{inference_result_folder}' 發生衝突, 請重新給定名稱"
+        assert run_task_info != exist_task_info or force_rerun, (
+            f"inference_result_folder: '{inference_result_folder}' 發生衝突, 請重新給定名稱"
+        )
     else:
         output_path.mkdir(parents=True, exist_ok=False)
         with Path(output_path, ".task_info.txt").open(mode="w", encoding="utf-8") as f:
