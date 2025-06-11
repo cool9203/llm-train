@@ -46,6 +46,8 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "--reasoning_effort", type=str, default="low", choices=["low", "medium", "high"], help="Reasoning budgets"
     )
+    parser.add_argument("--icl_example_path", type=str, default=None, help="In context learning example path")
+    parser.add_argument("--icl_example_quantity", type=int, default=1, help="In context learning example use quantity")
     parser.add_argument("--force_rerun", action="store_true", help="Force rerun")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
@@ -54,14 +56,25 @@ def arg_parser() -> argparse.Namespace:
     return args
 
 
+def get_base64_image(image_path: os.PathLike) -> str:
+    with Path(image_path).open(mode="rb") as image_file:
+        extension = Path(image_path).suffix.lower()
+        extension = ".jpeg" if extension in [".jpg"] else extension
+
+        base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+        return f"data:image/{extension};base64,{base64_image}"
+
+
 def run_online_model_result(
-    dataset_path: list[str],
+    dataset_path: str,
     api_key: str | None,
     model_name: str,
     provider: str,
     prompt: str,
     output_path: str = None,
     reasoning_effort: str = "low",
+    icl_example_path: str = None,
+    icl_example_quantity: int = 1,
     inference_result_folder: str = None,
     system_prompt: str = "",
     max_tokens: int = 16384,
@@ -70,6 +83,59 @@ def run_online_model_result(
     force_rerun: bool = True,
     **kwds,
 ) -> None:
+    dataset_path: Path = Path(dataset_path)
+    icl_example_path: Path = Path(icl_example_path)
+    if icl_example_path and Path(icl_example_path, dataset_path.name).exists():
+        icl_example_path = Path(icl_example_path, dataset_path.name)
+
+    if Path(icl_example_path).exists():
+        logger.info(f"icl_example_path: {icl_example_path}")
+    else:
+        logger.info(f"Not found path will be ignore icl_example_path: '{icl_example_path}' ")
+        icl_example_path = None
+
+    # Get in context learning data
+    icl_example_iter_data = list(icl_example_path.iterdir()) if icl_example_path else []
+    icl_example_iter_data.sort()
+    icl_example_data: list[dict[str, str]] = list()
+    icl_example_data_hash: list[dict[str, str]] = list
+    for icl_image_path in icl_example_iter_data:
+        if len(icl_example_data) >= icl_example_quantity:
+            break
+
+        icl_text_path = None
+        for extension in [".txt", ".json"]:
+            if Path(icl_example_path, f"{icl_image_path.stem}{extension}").exists():
+                icl_text_path = Path(icl_example_path, f"{icl_image_path.stem}{extension}")
+        if icl_text_path:
+            logger.info(f"Usage example: {icl_image_path!s}")
+            with icl_image_path.open(mode="r", encoding="utf-8") as f:
+                icl_base64_image = get_base64_image(icl_image_path)
+                icl_text = f.read()
+                icl_example_data.append(
+                    dict(
+                        image_path=str(icl_image_path),
+                        txt_path=str(icl_text_path),
+                        base64_image=icl_base64_image,
+                        text=icl_text,
+                    )
+                )
+                icl_example_hash_md5 = hashlib.sha256(
+                    str(
+                        dict(
+                            base64_image=icl_base64_image,
+                            text=icl_text,
+                        )
+                    ).encode("utf-8")
+                )
+                icl_example_data_hash.append(
+                    dict(
+                        image_path=str(icl_image_path),
+                        txt_path=str(icl_text_path),
+                        data_hash=icl_example_hash_md5.hexdigest(),
+                    )
+                )
+
     run_task_info = OrderedDict(
         provider=provider,
         model_name=model_name,
@@ -77,6 +143,7 @@ def run_online_model_result(
         max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
+        icl_example=str(icl_example_data_hash),
     )
 
     if not inference_result_folder:
@@ -85,9 +152,7 @@ def run_online_model_result(
         logger.info(f"hash_value: {hash_value}")
         inference_result_folder = f"{provider}-{model_name}-{reasoning_effort}-{hash_value}"
     api_key = api_key if api_key else os.getenv(f"{provider}_API_KEY".upper(), "")
-    output_path: Path = (
-        Path(output_path if output_path else Path(dataset_path).parent) / Path(dataset_path).name / inference_result_folder
-    )
+    output_path: Path = Path(output_path if output_path else dataset_path.parent) / dataset_path.name / inference_result_folder
     assert api_key, "Not pass or set 'api_key'"
 
     if output_path.exists():
@@ -132,7 +197,7 @@ def run_online_model_result(
     image_filepaths: list[Path] = list()
 
     # Pre-check dataset are correct pairs for label txt data and image data
-    for filepath in Path(dataset_path).iterdir():
+    for filepath in dataset_path.iterdir():
         if filepath.is_dir() or filepath.suffix.lower() not in [".jpg", ".jpeg", ".png"]:
             continue
         image_filepaths.append(filepath)
@@ -140,7 +205,7 @@ def run_online_model_result(
     logger.debug(f"data: {image_filepaths}")
 
     # Eval
-    for image_filepath in TQDM.tqdm(image_filepaths, desc=Path(dataset_path).stem, smoothing=0) if tqdm else image_filepaths:
+    for image_filepath in TQDM.tqdm(image_filepaths, desc=dataset_path.stem, smoothing=0) if tqdm else image_filepaths:
         inference_filepath = Path(output_path, f"{image_filepath.stem}")
         inference_filepath_exist = False
         if not force_rerun:
@@ -157,8 +222,7 @@ def run_online_model_result(
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        with Path(image_filepath).open(mode="rb") as image_file:
-            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+        for icl_example in icl_example_data:
             messages.append(
                 {
                     "role": "user",
@@ -166,13 +230,36 @@ def run_online_model_result(
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "url": icl_example["base64_image"],
                             },
                         },
                         {"type": "text", "text": prompt},
                     ],
                 }
             )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": icl_example["text"]},
+                    ],
+                }
+            )
+
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": get_base64_image(image_filepath),
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        )
 
         try:
             for attempt in Retrying(
