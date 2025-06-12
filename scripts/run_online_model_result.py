@@ -187,7 +187,7 @@ def run_online_model_result(
     if output_path.exists():
         with Path(output_path, ".task_info.txt").open(mode="r", encoding="utf-8") as f:
             exist_task_info = json.load(fp=f)
-        assert run_task_info != exist_task_info or force_rerun, (
+        assert run_task_info == exist_task_info or force_rerun, (
             f"inference_result_folder: '{inference_result_folder}' 發生衝突, 請重新給定名稱"
         )
     else:
