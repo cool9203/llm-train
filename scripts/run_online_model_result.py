@@ -43,12 +43,10 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
     parser.add_argument("--system_prompt", type=str, default="", help="Model system prompt")
     parser.add_argument("--inference_result_folder", type=str, default=None, help="Save inference result folder name")
-    parser.add_argument(
-        "--reasoning_effort", type=str, default="low", choices=["low", "medium", "high"], help="Reasoning budgets"
-    )
+    parser.add_argument("--reasoning_effort", type=str, default=None, choices=["low", "medium", "high"], help="Reasoning budgets")
     parser.add_argument("--icl_example_path", type=str, default=None, help="In context learning example path")
     parser.add_argument(
-        "--icl_example_quantity", type=int, default=1, help="In context learning example use quantity, set -1 are all use"
+        "--icl_example_quantity", type=int, default=-1, help="In context learning example use quantity, set -1 are all use"
     )
     parser.add_argument("--force_rerun", action="store_true", help="Force rerun")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
@@ -137,7 +135,7 @@ def run_online_model_result(
     provider: str,
     prompt: str,
     output_path: str = None,
-    reasoning_effort: str = "low",
+    reasoning_effort: str = None,
     icl_example_path: str = None,
     icl_example_quantity: int = 1,
     inference_result_folder: str = None,
@@ -164,6 +162,10 @@ def run_online_model_result(
         icl_example_path=icl_example_path,
         icl_example_quantity=icl_example_quantity,
     )
+
+    # Replace '\\n' to '\n'
+    prompt = prompt.replace("\\n", "\n")
+    system_prompt = system_prompt.replace("\\n", "\n")
 
     run_task_info = OrderedDict(
         provider=provider,
