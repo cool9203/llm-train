@@ -15,6 +15,7 @@ from pathlib import Path
 
 import openai
 import tqdm as TQDM
+from openai._types import NOT_GIVEN
 from openai.types.chat import ChatCompletion
 from tenacity import Retrying, after_log, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -43,7 +44,9 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
     parser.add_argument("--system_prompt", type=str, default="", help="Model system prompt")
     parser.add_argument("--inference_result_folder", type=str, default=None, help="Save inference result folder name")
-    parser.add_argument("--reasoning_effort", type=str, default=None, choices=["low", "medium", "high"], help="Reasoning budgets")
+    parser.add_argument(
+        "--reasoning_effort", type=str, default=NOT_GIVEN, choices=["low", "medium", "high"], help="Reasoning budgets"
+    )
     parser.add_argument("--icl_example_path", type=str, default=None, help="In context learning example path")
     parser.add_argument(
         "--icl_example_quantity", type=int, default=-1, help="In context learning example use quantity, set -1 are all use"
