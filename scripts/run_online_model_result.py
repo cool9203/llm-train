@@ -173,7 +173,7 @@ def run_online_model_result(
     run_task_info = OrderedDict(
         provider=provider,
         model_name=model_name,
-        reasoning_effort=reasoning_effort,
+        reasoning_effort=str(reasoning_effort),
         max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
