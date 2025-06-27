@@ -204,7 +204,11 @@ def run_online_model_result(
         hash_md5 = hashlib.sha256(str(run_task_info).encode("utf-8"))
         hash_value = hash_md5.hexdigest()[:16]
         logger.info(f"hash_value: {hash_value}")
-        inference_result_folder = f"{provider}-{model_name}-{reasoning_effort}-{hash_value}"
+        inference_result_folder = (
+            f"{provider}-{model_name}-{hash_value}"
+            if reasoning_effort == NOT_GIVEN
+            else f"{provider}-{model_name}-{reasoning_effort}-{hash_value}"
+        )
     api_key = api_key if api_key else os.getenv(f"{provider}_API_KEY".upper(), "")
     output_path: Path = Path(output_path if output_path else dataset_path.parent) / dataset_path.name / inference_result_folder
     assert api_key, "Not pass or set 'api_key'"
