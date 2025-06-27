@@ -51,6 +51,7 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "--icl_example_quantity", type=int, default=-1, help="In context learning example use quantity, set -1 are all use"
     )
+    parser.add_argument("--icl_example_prompt", type=str, default=None, help="In context learning example prompt")
     parser.add_argument(
         "--unclassified_icl_example_category",
         action="store_true",
@@ -146,6 +147,7 @@ def run_online_model_result(
     reasoning_effort: str = None,
     icl_example_path: str = None,
     icl_example_quantity: int = 1,
+    icl_example_prompt: str = None,
     unclassified_icl_example_category: bool = False,
     inference_result_folder: str = None,
     system_prompt: str = "",
@@ -157,6 +159,7 @@ def run_online_model_result(
 ) -> None:
     dataset_path: Path = Path(dataset_path)
     icl_example_path: Path = Path(icl_example_path)
+    icl_example_prompt = icl_example_prompt if icl_example_prompt else prompt
 
     if icl_example_path and not unclassified_icl_example_category and Path(icl_example_path, dataset_path.name).exists():
         icl_example_path = Path(icl_example_path, dataset_path.name)
@@ -187,6 +190,7 @@ def run_online_model_result(
 
     # Replace '\\n' to '\n'
     prompt = prompt.replace("\\n", "\n")
+    icl_example_prompt = icl_example_prompt.replace("\\n", "\n")
     system_prompt = system_prompt.replace("\\n", "\n")
 
     run_task_info = OrderedDict(
@@ -196,6 +200,7 @@ def run_online_model_result(
         max_tokens=max_tokens,
         system_prompt=system_prompt,
         prompt=prompt,
+        icl_example_prompt=icl_example_prompt,
         icl_example=icl_example_data_info,
         unclassified_icl_example_category=unclassified_icl_example_category,
     )
@@ -293,7 +298,7 @@ def run_online_model_result(
                                 "url": icl_example["base64_image"],
                             },
                         },
-                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": icl_example_prompt},
                     ],
                 }
             )
