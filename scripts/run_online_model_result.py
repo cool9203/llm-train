@@ -51,6 +51,11 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument(
         "--icl_example_quantity", type=int, default=-1, help="In context learning example use quantity, set -1 are all use"
     )
+    parser.add_argument(
+        "--unclassified_icl_example_category",
+        action="store_true",
+        help="Unclassified icl example category, will use all example to prompt",
+    )
     parser.add_argument("--force_rerun", action="store_true", help="Force rerun")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
@@ -141,6 +146,7 @@ def run_online_model_result(
     reasoning_effort: str = None,
     icl_example_path: str = None,
     icl_example_quantity: int = 1,
+    unclassified_icl_example_category: bool = False,
     inference_result_folder: str = None,
     system_prompt: str = "",
     max_tokens: int = 16384,
@@ -151,20 +157,33 @@ def run_online_model_result(
 ) -> None:
     dataset_path: Path = Path(dataset_path)
     icl_example_path: Path = Path(icl_example_path)
-    if icl_example_path and Path(icl_example_path, dataset_path.name).exists():
+
+    if icl_example_path and not unclassified_icl_example_category and Path(icl_example_path, dataset_path.name).exists():
         icl_example_path = Path(icl_example_path, dataset_path.name)
 
     if Path(icl_example_path).exists():
         logger.info(f"icl_example_path: {icl_example_path}")
+        logger.info(f"unclassified_icl_example_category: {unclassified_icl_example_category}")
     else:
         logger.info(f"Not found path will be ignore icl_example_path: '{icl_example_path}' ")
         icl_example_path = None
 
     # Get in context learning data
-    (icl_example_data, icl_example_data_info) = load_icl_example(
-        icl_example_path=icl_example_path,
-        icl_example_quantity=icl_example_quantity,
-    )
+    if unclassified_icl_example_category:
+        icl_example_data = list()
+        icl_example_data_info = list()
+        for icl_example_class_path in sorted(icl_example_path.iterdir()):
+            icl_data = load_icl_example(
+                icl_example_path=Path(icl_example_path, icl_example_class_path),
+                icl_example_quantity=icl_example_quantity,
+            )
+            icl_example_data += icl_data[0]
+            icl_example_data_info += icl_data[1]
+    else:
+        (icl_example_data, icl_example_data_info) = load_icl_example(
+            icl_example_path=icl_example_path,
+            icl_example_quantity=icl_example_quantity,
+        )
 
     # Replace '\\n' to '\n'
     prompt = prompt.replace("\\n", "\n")
@@ -178,6 +197,7 @@ def run_online_model_result(
         system_prompt=system_prompt,
         prompt=prompt,
         icl_example=icl_example_data_info,
+        unclassified_icl_example_category=unclassified_icl_example_category,
     )
 
     if not inference_result_folder:
