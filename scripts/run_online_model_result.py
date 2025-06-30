@@ -311,18 +311,21 @@ def run_online_model_result(
                 }
             )
 
+        contents = [
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": get_base64_image(image_filepath),
+                },
+            },
+        ]
+        if prompt:
+            contents.append({"type": "text", "text": prompt})
+
         messages.append(
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": get_base64_image(image_filepath),
-                        },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
+                "content": contents,
             }
         )
 
