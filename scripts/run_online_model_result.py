@@ -42,6 +42,8 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("--model_name", type=str, required=True, help="Model name")
     parser.add_argument("--prompt", type=str, required=True, help="Model prompt")
     parser.add_argument("--max_tokens", type=int, default=4096, help="Model max tokens")
+    parser.add_argument("--temperature", type=float, default=NOT_GIVEN, help="Model temperature")
+    parser.add_argument("--top_p", type=float, default=NOT_GIVEN, help="Model top_p")
     parser.add_argument("--system_prompt", type=str, default="", help="Model system prompt")
     parser.add_argument("--inference_result_folder", type=str, default=None, help="Save inference result folder name")
     parser.add_argument(
@@ -69,6 +71,7 @@ def get_base64_image(image_path: os.PathLike) -> str:
     with Path(image_path).open(mode="rb") as image_file:
         extension = Path(image_path).suffix.lower()
         extension = ".jpeg" if extension in [".jpg"] else extension
+        extension = extension[1:] if extension.startswith(".") else extension
 
         base64_image = base64.b64encode(image_file.read()).decode("utf-8")
         return f"data:image/{extension};base64,{base64_image}"
@@ -152,6 +155,8 @@ def run_online_model_result(
     inference_result_folder: str = None,
     system_prompt: str = "",
     max_tokens: int = 16384,
+    temperature: float = NOT_GIVEN,
+    top_p: float = NOT_GIVEN,
     retry: int = 3,
     tqdm: bool = True,
     force_rerun: bool = True,
@@ -198,6 +203,8 @@ def run_online_model_result(
         model_name=model_name,
         reasoning_effort=str(reasoning_effort),
         max_tokens=max_tokens,
+        temperature=temperature,
+        top_p=top_p,
         system_prompt=system_prompt,
         prompt=prompt,
         icl_example_prompt=icl_example_prompt,
@@ -344,7 +351,8 @@ def run_online_model_result(
                         model=model_name,
                         max_completion_tokens=max_tokens,
                         reasoning_effort=reasoning_effort,
-                        top_p=1.0,
+                        top_p=top_p,
+                        temperature=temperature,
                     )
                     end_time = time.time()
         except Exception as e:
