@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import argparse
+import ast
 import json
 import os
 import pprint
@@ -313,12 +314,20 @@ def from_img_and_txt(
                 "content": f"<image> {prompt}",
             }
         )
-        messages.append(
-            {
-                "role": "assistant",
-                "content": "\n\n".join(texts) if output_format else label_content,
-            }
-        )
+        try:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "\n\n".join(texts)
+                    if output_format
+                    else json.dumps(
+                        {"類別": Path(_image_path).parent.name, **ast.literal_eval(label_content)}, ensure_ascii=False
+                    ),
+                }
+            )
+        except Exception as e:
+            print(_image_path)
+            raise e
 
         converted_data.append(
             {
