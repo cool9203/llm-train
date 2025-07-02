@@ -46,6 +46,7 @@ def arg_parser() -> argparse.Namespace:
         default=0,
         help="Add row comment to contain table content, for hint row index",
     )
+    parser.add_argument("--scan_input_folder", action="store_true", help="Scan input folder")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
     args = parser.parse_args()
@@ -93,18 +94,25 @@ def from_img_and_txt(
     reasoning: bool = False,
     code_block: bool = False,
     row_comment: int = 0,
+    scan_input_folder: bool = False,
     tqdm: bool = True,
 ) -> list[dict[str, list[str | dict[str, str]]]]:
     from llm_train import utils
 
     labels: list[Path] = list()
     for input_path in input_paths:
-        for extension in [".txt", ".html"]:
-            labels += list(Path(input_path).glob(f"*{extension}"))
+        if scan_input_folder:
+            for folder_path in Path(input_path).iterdir():
+                for extension in [".txt", ".html"]:
+                    labels += list(Path(folder_path).glob(f"*{extension}"))
+        else:
+            for extension in [".txt", ".html"]:
+                labels += list(Path(input_path).glob(f"*{extension}"))
 
     converted_data = list()
     for label_file in TQDM.tqdm(labels) if tqdm else labels:
         _image_path = None
+        target_image_path = None
 
         # Get image path
         for image_extension in [".png", ".jpg", ".jpeg"]:
@@ -114,6 +122,22 @@ def from_img_and_txt(
                 _image_path = Path(label_file.parent, label_file.stem + image_extension.upper())
 
         assert _image_path is not None, f"未找到標記檔案對應之圖像: '{label_file!s}'"
+
+        # Get target image path
+        if image_path is not None:
+            if scan_input_folder:
+                target_image_path = Path(
+                    image_path,
+                    Path(_image_path).parent.name,
+                    Path(_image_path).name,
+                )
+            else:
+                target_image_path = Path(
+                    image_path,
+                    Path(_image_path).name,
+                )
+        else:
+            target_image_path = Path(_image_path)
 
         with label_file.open(mode="r", encoding="utf-8") as f:
             label_content = f.read()
@@ -299,16 +323,7 @@ def from_img_and_txt(
         converted_data.append(
             {
                 "messages": messages,
-                "images": [
-                    str(
-                        Path(
-                            image_path,
-                            Path(_image_path).name,
-                        )
-                        if image_path is not None
-                        else Path(_image_path)
-                    )
-                ],
+                "images": [str(target_image_path)],
             }
         )
 
