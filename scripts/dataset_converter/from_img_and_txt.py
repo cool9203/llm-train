@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import base64
 import json
 import os
 import pprint
@@ -48,6 +49,7 @@ def arg_parser() -> argparse.Namespace:
         help="Add row comment to contain table content, for hint row index",
     )
     parser.add_argument("--scan_input_folder", action="store_true", help="Scan input folder")
+    parser.add_argument("--to_openai_train", action="store_true", help="Output to openai train data format")
     parser.add_argument("--tqdm", action="store_true", help="Show progress bar")
 
     args = parser.parse_args()
@@ -96,6 +98,7 @@ def from_img_and_txt(
     code_block: bool = False,
     row_comment: int = 0,
     scan_input_folder: bool = False,
+    to_openai_train: bool = False,
     tqdm: bool = True,
 ) -> list[dict[str, list[str | dict[str, str]]]]:
     from llm_train import utils
@@ -308,12 +311,30 @@ def from_img_and_txt(
                     "content": system_prompt,
                 }
             )
-        messages.append(
-            {
-                "role": "user",
-                "content": f"<image> {prompt}",
-            }
-        )
+
+        if to_openai_train:
+            with Path(_image_path).open(mode="rb") as f:
+                image_base64 = base64.b64encode(f.read())
+                image_extension = "jpeg" if Path(_image_path).suffix[1:] in ["jpg"] else Path(_image_path).suffix[1:]
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/{image_extension};base64,{image_base64.decode()}"},
+                            },
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                )
+        else:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"<image> {prompt}",
+                }
+            )
         try:
             messages.append(
                 {
@@ -339,12 +360,17 @@ def from_img_and_txt(
     if output_path:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(
-                converted_data,
-                f,
-                indent=2,
-                ensure_ascii=False,
-            )
+            if to_openai_train:
+                for data in converted_data:
+                    f.write(json.dumps({"messages": data["messages"]}, ensure_ascii=False))
+                    f.write("\n")
+            else:
+                json.dump(
+                    converted_data,
+                    f,
+                    indent=2,
+                    ensure_ascii=False,
+                )
         print(f"✅ 已處理 {len(converted_data)} 筆資料，JSON 儲存到 {output_path}")
     else:
         print(f"✅ 已處理 {len(converted_data)} 筆資料")
